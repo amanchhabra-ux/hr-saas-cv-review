@@ -1554,22 +1554,32 @@ pre {
 /* Mobile Responsiveness */
 @media (max-width: 850px) {
   .shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    height: 100vh;
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
   }
   .sidebar {
     border-right: none;
     border-bottom: 1px solid var(--line);
     padding: 16px;
-    max-height: 35vh;
+    height: auto;
+    max-height: none;
+    overflow-y: visible;
+  }
+  .queue {
+    max-height: 250px;
     overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px;
+    background: #f8fafc;
   }
   .workspace {
     padding: 16px;
-    overflow-y: auto;
-    height: 65vh;
+    height: auto;
+    overflow-y: visible;
   }
   .reviewGrid {
     grid-template-columns: 1fr;
@@ -1589,12 +1599,12 @@ pre {
     align-items: flex-start;
   }
   .loginCard {
-    width: 90%;
+    width: 92%;
     margin: 20px auto;
     padding: 24px;
   }
   .cvViewerFull {
-    min-height: 600px;
+    min-height: 70vh;
   }
 }
 
