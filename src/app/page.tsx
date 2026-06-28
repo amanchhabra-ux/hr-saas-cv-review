@@ -14,7 +14,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { ChangeEvent, useMemo, useState, useEffect } from "react";
+import React, { ChangeEvent, useMemo, useState, useEffect, useRef } from "react";
 
 type ReviewAction =
   | "accepted"
@@ -459,30 +459,43 @@ export default function Home() {
     event.target.value = "";
   }
 
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   function updateSelected(changes: Partial<Candidate>) {
     if (!selected || !userEmail) return;
     const finalChanges = {
       ...changes,
       reviewer: userEmail,
     };
+    // Update local state immediately
     setCandidates((current) =>
       current.map((candidate) =>
         candidate.id === selected.id ? { ...candidate, ...finalChanges } : candidate,
       ),
     );
-    // Persist edits to server database
-    fetch(`/api/candidates/${selected.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-        changes: finalChanges,
-      }),
-    }).catch((err) => console.error("Failed to update candidate on server", err));
+    // Debounce server persistence (save after 800ms pause)
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      fetch(`/api/candidates/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: userEmail,
+          changes: finalChanges,
+        }),
+      }).catch((err) => console.error("Failed to update candidate on server", err));
+    }, 800);
   }
 
   async function submitAction(action: ReviewAction) {
     if (!selected || !userEmail) return;
+    // Flush any pending debounced comment save
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
     setIsSending(true);
     const next = { ...selected, status: action, reviewer: userEmail, notified: true, comments: selected.comments };
     setCandidates((current) =>
