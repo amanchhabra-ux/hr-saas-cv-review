@@ -169,12 +169,6 @@ export default function Home() {
   const [authError, setAuthError] = useState("");
   const [loadingAuth, setLoadingAuth] = useState(false);
 
-  // Guest portals state
-  const [authTab, setAuthTab] = useState<"login" | "upload">("login");
-  const [publicUploading, setPublicUploading] = useState(false);
-  const [publicUploadSuccess, setPublicUploadSuccess] = useState(false);
-  const [publicUploadCount, setPublicUploadCount] = useState(0);
-
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [query, setQuery] = useState("");
@@ -426,121 +420,6 @@ export default function Home() {
     event.target.value = "";
   }
 
-  async function handlePublicUpload(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files || []);
-    if (files.length === 0) return;
-
-    setPublicUploading(true);
-    setAuthError("");
-
-    try {
-      // Convert files to base64 strings
-      const fileBase64s = await Promise.all(
-        files.map((file) => {
-          return new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const result = reader.result as string;
-              const base64 = result.split(",")[1];
-              resolve(base64);
-            };
-            reader.readAsDataURL(file);
-          });
-        })
-      );
-
-      const formData = new FormData();
-      files.forEach((file) => formData.append("files", file));
-
-      let parsed: Array<{ fileName: string; text: string; method?: string; warning?: string }> = [];
-      let rendered: Array<{
-        fileName: string;
-        base64: string;
-        mimeType: string;
-        method?: string;
-        warning?: string;
-      }> = [];
-      
-      const [parseResponse, renderResults] = await Promise.all([
-        fetch("/api/parse-cv", {
-          method: "POST",
-          body: formData,
-        }),
-        Promise.all(
-          files.map(async (file) => {
-            const singleFileData = new FormData();
-            singleFileData.append("file", file);
-            const response = await fetch("/api/render-cv", {
-              method: "POST",
-              body: singleFileData,
-            });
-            return response.json();
-          }),
-        ),
-      ]);
-      
-      if (!parseResponse.ok) throw new Error("CV parsing failed");
-      const data = (await parseResponse.json()) as {
-        parsed: Array<{ fileName: string; text: string; method?: string; warning?: string }>;
-      };
-      parsed = data.parsed;
-      rendered = renderResults as typeof rendered;
-
-      const uploaded = files.map((file, idx) => {
-        const parsedFile = parsed.find((item) => item.fileName === file.name);
-        const renderedFile = rendered.find(
-          (item) =>
-            item.fileName === file.name ||
-            item.fileName === `${file.name.replace(/\.[^.]+$/, "")}.pdf` ||
-            item.fileName === `${file.name.replace(/\.[^.]+$/, "")}.html`,
-        );
-        const text = parsedFile?.text || "";
-        return {
-          id: crypto.randomUUID(),
-          fileName: file.name,
-          uploadedAt: new Date().toISOString(),
-          displayName: getDisplayName(file.name, text),
-          email: getEmail(text),
-          fileType: file.type || file.name.split(".").pop()?.toUpperCase() || "Unknown",
-          objectUrl: "", 
-          previewUrl: "",
-          previewMethod: renderedFile?.method || "original-file",
-          rawText: text,
-          parseMethod: parsedFile?.method || "original-file",
-          parseWarning: renderedFile?.warning || parsedFile?.warning || "",
-          status: "pending" as const,
-          comments: "",
-          reviewer: "",
-          notified: false,
-          discipline: detectDiscipline(file.name, text),
-          fileBase64: fileBase64s[idx],
-          fileMimeType: file.type || "application/octet-stream",
-          previewBase64: renderedFile?.base64,
-          previewMimeType: renderedFile?.mimeType,
-          uploaderEmail: "anonymous@cvreview.com",
-        };
-      });
-
-      // Save candidates to server
-      for (const candidate of uploaded) {
-        await fetch("/api/candidates", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "anonymous@cvreview.com", candidate }),
-        });
-      }
-
-      setPublicUploadCount(uploaded.length);
-      setPublicUploadSuccess(true);
-    } catch (err) {
-      console.error(err);
-      setAuthError("Failed to parse and upload CV. Please try again.");
-    } finally {
-      setPublicUploading(false);
-      event.target.value = "";
-    }
-  }
-
   function updateSelected(changes: Partial<Candidate>) {
     if (!selected || !userEmail) return;
     const finalChanges = {
@@ -607,124 +486,65 @@ export default function Home() {
             <h2>CV Review Console</h2>
             <p>Access workspaces & candidate uploads</p>
           </div>
-
-          <div className="tabContainer" aria-label="Portal tabs">
-            <button
-              className={`tabBtn ${authTab === "login" ? "active" : ""}`}
-              onClick={() => { setAuthTab("login"); setAuthError(""); }}
-              type="button"
-            >
-              Sign In
-            </button>
-            <button
-              className={`tabBtn ${authTab === "upload" ? "active" : ""}`}
-              onClick={() => { setAuthTab("upload"); setAuthError(""); }}
-              type="button"
-            >
-              Submit CV
-            </button>
-          </div>
           
           {authError && <div className="authError">{authError}</div>}
           
-          {authTab === "login" ? (
-            <form onSubmit={handleAuthSubmit} className="loginForm">
-              {!otpSent ? (
-                <>
-                  <label className="field">
-                    <span>Enter your Email Address</span>
-                    <div className="inputIcon">
-                      <Mail size={18} />
-                      <input
-                        type="email"
-                        required
-                        placeholder="you@company.com (admin@cvreview.com for Admin)"
-                        value={loginEmail}
-                        onChange={(e) => setLoginEmail(e.target.value)}
-                      />
-                    </div>
-                  </label>
-                  <button type="submit" disabled={loadingAuth} className="loginButton">
-                    {loadingAuth ? "Sending OTP..." : "Get Instant OTP"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <label className="field">
-                    <span>Enter 6-digit OTP Code</span>
-                    <div className="inputIcon">
-                      <CheckCircle2 size={18} />
-                      <input
-                        type="text"
-                        maxLength={6}
-                        required
-                        placeholder="123456"
-                        value={enteredOtp}
-                        onChange={(e) => setEnteredOtp(e.target.value)}
-                      />
-                    </div>
-                  </label>
-                  
-                  {devOtp && (
-                    <div className="devOtpNotice">
-                      <strong>[Dev Mode]</strong> Your OTP is: <code>{devOtp}</code>
-                    </div>
-                  )}
-                  
-                  <button type="submit" disabled={loadingAuth} className="loginButton">
-                    {loadingAuth ? "Verifying..." : "Verify & Login"}
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => { setOtpSent(false); setEnteredOtp(""); }} 
-                    className="resendButton"
-                  >
-                    Change Email
-                  </button>
-                </>
-              )}
-            </form>
-          ) : (
-            <div className="publicUploadContainer">
-              {publicUploadSuccess ? (
-                <div className="uploadSuccessCard">
-                  <CheckCircle2 size={44} className="successIcon" />
-                  <h3>CV Uploaded Successfully</h3>
-                  <p>Your CV has been successfully uploaded to the recruitment reviewer queue on Vercel workspace.</p>
-                  <button 
-                    onClick={() => { setPublicUploadSuccess(false); setPublicUploadCount(0); }} 
-                    className="loginButton"
-                    type="button"
-                  >
-                    Submit Another CV
-                  </button>
-                </div>
-              ) : (
-                <div className="publicUploadForm">
-                  <p className="publicUploadInstructions">Anyone can upload their CV here. It will be saved securely on the server for admin review.</p>
-                  
-                  {publicUploading ? (
-                    <div className="uploadSpinnerCard">
-                      <div className="spinner"></div>
-                      <p>Parsing and formatting CV document...</p>
-                    </div>
-                  ) : (
-                    <label className="uploadBox public">
-                      <Upload size={32} />
-                      <span>Choose CV files to submit</span>
-                      <small>PDF, DOC, DOCX, TXT, RTF, or MD</small>
-                      <input
-                        accept=".pdf,.doc,.docx,.txt,.rtf,.md"
-                        multiple
-                        onChange={handlePublicUpload}
-                        type="file"
-                      />
-                    </label>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          <form onSubmit={handleAuthSubmit} className="loginForm">
+            {!otpSent ? (
+              <>
+                <label className="field">
+                  <span>Enter your Email Address</span>
+                  <div className="inputIcon">
+                    <Mail size={18} />
+                    <input
+                      type="email"
+                      required
+                      placeholder="you@company.com (admin@cvreview.com for Admin)"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                    />
+                  </div>
+                </label>
+                <button type="submit" disabled={loadingAuth} className="loginButton">
+                  {loadingAuth ? "Sending OTP..." : "Get Instant OTP"}
+                </button>
+              </>
+            ) : (
+              <>
+                <label className="field">
+                  <span>Enter 6-digit OTP Code</span>
+                  <div className="inputIcon">
+                    <CheckCircle2 size={18} />
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      placeholder="123456"
+                      value={enteredOtp}
+                      onChange={(e) => setEnteredOtp(e.target.value)}
+                    />
+                  </div>
+                </label>
+                
+                {devOtp && (
+                  <div className="devOtpNotice">
+                    <strong>[Dev Mode]</strong> Your OTP is: <code>{devOtp}</code>
+                  </div>
+                )}
+                
+                <button type="submit" disabled={loadingAuth} className="loginButton">
+                  {loadingAuth ? "Verifying..." : "Verify & Login"}
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => { setOtpSent(false); setEnteredOtp(""); }} 
+                  className="resendButton"
+                >
+                  Change Email
+                </button>
+              </>
+            )}
+          </form>
         </div>
       </main>
     );
@@ -874,7 +694,7 @@ export default function Home() {
         </div>
 
         {selected ? (
-          <div className="reviewGrid">
+          <div className="reviewGrid adminView">
             <article className="panel adb">
               <div className="panelHeader">
                 <h3>Original CV</h3>
