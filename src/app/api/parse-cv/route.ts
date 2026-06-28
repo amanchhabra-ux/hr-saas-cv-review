@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import mammoth from "mammoth";
 import WordExtractor from "word-extractor";
-import pdfParse from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 
 export const runtime = "nodejs";
 
@@ -40,8 +40,13 @@ async function extractLegacyWord(buffer: Buffer) {
 }
 
 async function extractPdfText(buffer: Buffer) {
-  const data = await pdfParse(buffer);
-  return cleanText(data.text);
+  const parser = new PDFParse({ data: new Uint8Array(buffer) });
+  try {
+    const result = await parser.getText();
+    return cleanText(result.text);
+  } finally {
+    await parser.destroy();
+  }
 }
 
 async function extractText(file: File): Promise<ParsedCv> {
