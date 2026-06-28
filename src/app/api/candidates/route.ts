@@ -44,3 +44,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Server error adding candidate" }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const email = searchParams.get("email");
+    
+    // Only admin can delete all candidates
+    if (!email || email.toLowerCase() !== "admin@cvreview.com") {
+      return NextResponse.json({ message: "Only admin can clear the database" }, { status: 403 });
+    }
+    
+    const { deleteAllCandidates } = await import('../../../lib/db');
+    await deleteAllCandidates();
+    
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Failed to bulk delete candidates:", error);
+    return NextResponse.json({ message: "Server error clearing candidates" }, { status: 500 });
+  }
+}

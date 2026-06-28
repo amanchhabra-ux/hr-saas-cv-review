@@ -480,6 +480,26 @@ export default function Home() {
     }
   }
 
+  async function handleClearAllCandidates() {
+    if (!userEmail || userEmail.toLowerCase() !== "admin@cvreview.com") return;
+    if (!confirm("WARNING: Are you absolutely sure you want to permanently delete ALL CVs from the database? This action cannot be undone.")) return;
+    try {
+      const res = await fetch(`/api/candidates?email=${encodeURIComponent(userEmail)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setCandidates([]);
+        setSelectedId("");
+        setToast("All CVs have been permanently deleted");
+      } else {
+        const data = await res.json();
+        setToast(data.message || "Failed to clear database");
+      }
+    } catch {
+      setToast("Network error clearing database");
+    }
+  }
+
   // Admin notifications: collect all reviewed CVs by non-admin users
   const adminNotifications = useMemo(() => {
     if (userEmail?.toLowerCase() !== "admin@cvreview.com") return [];
@@ -862,6 +882,20 @@ export default function Home() {
           ))}
         </div>
 
+        <div className="queueHeader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="sectionLabel">CV Queue:</span>
+          {userEmail === "admin@cvreview.com" && candidates.length > 0 && (
+            <button
+              onClick={handleClearAllCandidates}
+              className="danger"
+              type="button"
+              style={{ padding: '2px 8px', fontSize: '11px', fontWeight: 'bold', borderRadius: '4px', border: 'none', background: 'var(--danger)', color: '#fff', cursor: 'pointer' }}
+              title="Clear all CVs from the database"
+            >
+              Clear All
+            </button>
+          )}
+        </div>
         <div className="queue">
           {filtered.map((candidate) => (
             <button

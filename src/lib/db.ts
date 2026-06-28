@@ -297,6 +297,40 @@ export async function deleteCandidate(candidateId: string): Promise<boolean> {
   return true;
 }
 
+export async function deleteAllCandidates(): Promise<boolean> {
+  const db = await readDb();
+  if (db.candidates.length === 0) return true;
+  
+  db.candidates = [];
+  await writeDb(db);
+  
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const { list, del } = await import('@vercel/blob');
+      const fileBlobs = await list({ prefix: `candidates/` });
+      const urls = fileBlobs.blobs.map(b => b.url);
+      
+      // Vercel blob del() supports up to 1000 blobs at a time, but we'll delete in chunks of 500 just in case
+      const chunkSize = 500;
+      for (let i = 0; i < urls.length; i += chunkSize) {
+        const chunk = urls.slice(i, i + chunkSize);
+        if (chunk.length > 0) {
+          await del(chunk);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to bulk delete Vercel Blobs:", e);
+    }
+  } else {
+    try {
+      await fs.rm(path.join(DATA_DIR, 'files'), { recursive: true, force: true }).catch(() => {});
+      await fs.rm(path.join(DATA_DIR, 'previews'), { recursive: true, force: true }).catch(() => {});
+    } catch {}
+  }
+  
+  return true;
+}
+
 export async function getCandidateFile(candidateId: string): Promise<{ data: Buffer; mimeType: string } | null> {
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
