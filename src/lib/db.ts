@@ -57,22 +57,16 @@ export async function readDb(): Promise<DbData> {
   
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      const { list } = await import('@vercel/blob');
-      let url = cachedBlobUrl;
-      if (!url) {
-        const { blobs } = await list({ prefix: 'db.json' });
-        if (blobs[0]) {
-          url = blobs[0].url;
-          cachedBlobUrl = url;
+      const { get } = await import('@vercel/blob');
+      const res = await get('db.json', { access: 'private', token: process.env.BLOB_READ_WRITE_TOKEN });
+      if (res && res.stream) {
+        const chunks = [];
+        for await (const chunk of res.stream as any) {
+          chunks.push(chunk as Uint8Array);
         }
-      }
-      
-      if (url) {
-        const res = await fetch(url, { cache: 'no-store' });
-        if (res.ok) {
-          const parsed = await res.json() as DbData;
-          return migrateDb(parsed);
-        }
+        const content = Buffer.concat(chunks).toString("utf8");
+        const parsed = JSON.parse(content) as DbData;
+        return migrateDb(parsed);
       }
     } catch (e) {
       console.error("Failed to read from Vercel Blob:", e);
