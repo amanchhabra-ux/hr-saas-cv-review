@@ -21,23 +21,8 @@ export async function GET(request: Request) {
       );
       return NextResponse.json({ candidates: allCandidates });
     } else {
-      const db = await readDb();
-      const userCandidates = db.users[lowerEmail] || [];
-      const adminCandidates = db.users["admin@cvreview.com"] || [];
-      const combined = [...userCandidates, ...adminCandidates];
-      
-      const masked = combined.map((c) => ({
-        ...c,
-        status: "pending" as const,
-        comments: "",
-        reviewer: "",
-        notified: false,
-      }));
-      
-      masked.sort(
-        (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-      );
-      return NextResponse.json({ candidates: masked });
+      const candidates = await getCandidates(lowerEmail);
+      return NextResponse.json({ candidates });
     }
   } catch (error) {
     console.error("Failed to fetch candidates:", error);
