@@ -15,6 +15,7 @@ export async function GET(
     return new Response(new Uint8Array(fileData.data), {
       headers: {
         "Content-Type": fileData.mimeType,
+        "Content-Disposition": "inline",
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
