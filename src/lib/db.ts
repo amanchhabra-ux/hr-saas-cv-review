@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from 'next/cache';
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -53,6 +54,7 @@ async function ensureDb() {
 }
 
 export async function readDb(): Promise<DbData> {
+  noStore(); // Completely disable Next.js aggressive fetch data caching for this entire execution path
   await ensureDb();
   
   if (process.env.BLOB_READ_WRITE_TOKEN) {
