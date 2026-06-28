@@ -285,7 +285,7 @@ export default function Home() {
 
   async function fetchCandidates(email: string) {
     try {
-      const res = await fetch(`/api/candidates?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`/api/candidates?email=${encodeURIComponent(email)}&_t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         if (data.projects) {
@@ -459,6 +459,13 @@ export default function Home() {
         { method: "DELETE" },
       );
       if (res.ok) {
+        setCandidates((cur) => cur.filter((c) => c.id !== candidateId));
+        if (selectedId === candidateId) {
+          setSelectedId("");
+        }
+        setToast("CV removed successfully");
+      } else if (res.status === 404) {
+        // If backend says CV is already gone, remove it from UI anyway
         setCandidates((cur) => cur.filter((c) => c.id !== candidateId));
         if (selectedId === candidateId) {
           setSelectedId("");
