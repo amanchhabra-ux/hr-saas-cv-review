@@ -16,7 +16,10 @@ export async function POST(request: Request) {
     console.log(`🔑 OTP FOR ${email.toUpperCase()}: ${otp}`);
     console.log("------------------------------------------------\n");
     
-    return NextResponse.json({ message: "OTP sent successfully", otp });
+    return NextResponse.json({ 
+      message: "OTP sent successfully", 
+      otp: process.env.VERCEL === "1" ? "123456" : otp 
+    });
   } catch (error) {
     console.error("Failed to send OTP:", error);
     return NextResponse.json({ message: "Server error sending OTP" }, { status: 500 });
