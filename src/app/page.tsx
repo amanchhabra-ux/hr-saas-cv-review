@@ -10,6 +10,7 @@ import {
   Mail,
   MessageSquare,
   Search,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -175,7 +176,6 @@ export default function Home() {
   const [selectedDiscipline, setSelectedDiscipline] = useState<
     "All" | "Electrical" | "Civil" | "Mechanical" | "Planning" | "HSE"
   >("All");
-  const [notifyEmail, setNotifyEmail] = useState("");
   const [toast, setToast] = useState("");
   const [isSending, setIsSending] = useState(false);
 
@@ -298,6 +298,45 @@ export default function Home() {
     setDevOtp(null);
     setToast("Logged out successfully");
   }
+
+  async function handleDeleteCandidate(candidateId: string) {
+    if (!userEmail || userEmail.toLowerCase() !== "admin@cvreview.com") return;
+    if (!confirm("Are you sure you want to remove this CV?")) return;
+    try {
+      const res = await fetch(
+        `/api/candidates/${candidateId}?email=${encodeURIComponent(userEmail)}`,
+        { method: "DELETE" },
+      );
+      if (res.ok) {
+        setCandidates((cur) => cur.filter((c) => c.id !== candidateId));
+        if (selectedId === candidateId) {
+          setSelectedId("");
+        }
+        setToast("CV removed successfully");
+      } else {
+        const data = await res.json();
+        setToast(data.message || "Failed to remove CV");
+      }
+    } catch {
+      setToast("Network error removing CV");
+    }
+  }
+
+  // Admin notifications: collect all reviewed CVs by non-admin users
+  const adminNotifications = useMemo(() => {
+    if (userEmail?.toLowerCase() !== "admin@cvreview.com") return [];
+    return candidates
+      .filter(
+        (c) =>
+          c.status !== "pending" &&
+          c.reviewer &&
+          c.reviewer.toLowerCase() !== "admin@cvreview.com",
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
+      );
+  }, [candidates, userEmail]);
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     if (!userEmail) return;
@@ -445,36 +484,29 @@ export default function Home() {
   async function submitAction(action: ReviewAction) {
     if (!selected || !userEmail) return;
     setIsSending(true);
-    const next = { ...selected, status: action, reviewer: userEmail, notified: true };
+    const next = { ...selected, status: action, reviewer: userEmail, notified: true, comments: selected.comments };
     setCandidates((current) =>
       current.map((candidate) => (candidate.id === selected.id ? next : candidate)),
     );
 
-    // Save status changes to server
+    // Save status changes to server (admin sees these in their notifications panel)
     await fetch(`/api/candidates/${selected.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: userEmail,
-        changes: { status: action, reviewer: userEmail, notified: true },
+        changes: { status: action, reviewer: userEmail, notified: true, comments: selected.comments },
       }),
     }).catch((err) => console.error("Failed to update candidate status on server", err));
 
-    const response = await fetch("/api/notify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        candidateName: next.displayName,
-        candidateEmail: next.email,
-        action,
-        comments: next.comments,
-        reviewer: next.reviewer,
-        notifyEmail,
-      }),
-    });
-    const result = await response.json();
     setIsSending(false);
-    setToast(result.mode === "sent" ? "Notification email sent" : result.message);
+    const actionLabels: Record<ReviewAction, string> = {
+      accepted: "Accepted",
+      accepted_with_comments: "Accepted with comments",
+      comments_only: "Comments saved",
+      rejected: "Rejected",
+    };
+    setToast(`${actionLabels[action]} — visible to admin`);
   }
 
   if (!userEmail) {
@@ -573,20 +605,7 @@ export default function Home() {
           />
         </label>
 
-        <label className="field">
-          <span>Notification email</span>
-          <div className="inputIcon">
-            <Mail size={16} />
-            <input
-              autoComplete="email"
-              onBlur={(event) => setNotifyEmail(event.target.value.trim())}
-              onChange={(event) => setNotifyEmail(event.target.value)}
-              placeholder="client@example.com"
-              type="email"
-              value={notifyEmail}
-            />
-          </div>
-        </label>
+
 
         <div className="search">
           <Search size={16} />
@@ -649,6 +668,7 @@ export default function Home() {
 
       <section className="workspace">
         {userEmail === "admin@cvreview.com" && (
+          <>
           <div className="adminStatsGrid">
             <div className="statCard">
               <span className="statValue">{candidates.length}</span>
@@ -679,6 +699,33 @@ export default function Home() {
               <span className="statLabel">Rejected</span>
             </div>
           </div>
+
+          {adminNotifications.length > 0 && (
+            <div className="adminNotificationsPanel">
+              <h3 className="notifHeader"><Bell size={16} /> User Review Activity</h3>
+              <div className="notifList">
+                {adminNotifications.map((n) => (
+                  <div key={n.id} className={`notifItem ${n.status}`}>
+                    <div className="notifTop">
+                      <span className="notifReviewer">{n.reviewer}</span>
+                      <span className={`notifStatus badge ${n.status}`}>
+                        {statusLabel[n.status]}
+                      </span>
+                    </div>
+                    <div className="notifCandidate">
+                      CV: <strong>{n.displayName}</strong>
+                    </div>
+                    {n.comments && (
+                      <div className="notifComments">
+                        <MessageSquare size={13} /> {n.comments}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         <div className="topbar">
@@ -694,78 +741,82 @@ export default function Home() {
         </div>
 
         {selected ? (
-          <div className="reviewGrid adminView">
-            <article className="panel adb">
-              <div className="panelHeader">
-                <h3>Original CV</h3>
+          <div className="verticalReviewLayout">
+            {/* Top bar: status badge + Open / Download / Remove */}
+            <div className="cvTopBar">
+              <div className="cvTopBarLeft">
+                <h3>{selected.displayName}</h3>
                 <span className={`badge ${selected.status}`}>{statusLabel[selected.status]}</span>
-              </div>
-              {selected.parseWarning && (
-                <p className="parseWarning">{selected.parseWarning}</p>
-              )}
-              <div className="cvViewer" aria-label="Original CV preview">
-                {selected.previewUrl && (selected.previewMethod.includes("pdf") || selected.previewUrl !== selected.objectUrl) ? (
-                  <iframe className="pdfFrame" src={selected.previewUrl} title={selected.fileName} />
-                ) : selected.rawText ? (
-                  <pre className="originalText">{selected.rawText}</pre>
-                ) : (
-                  <div className="blankState compact">
-                    <FileText size={34} />
-                    <h2>Preview unavailable</h2>
-                    <p>Open or download the original file to review it.</p>
-                  </div>
+                {selected.reviewer && selected.reviewer !== userEmail && (
+                  <span className="reviewerTag">Reviewed by {selected.reviewer}</span>
                 )}
               </div>
-              <div className="documentToolbar" style={{ marginTop: "16px" }}>
+              <div className="documentToolbar" style={{ margin: 0 }}>
                 <button onClick={() => openOriginal(selected)} type="button">
                   <ExternalLink size={16} /> Open
                 </button>
                 <button onClick={() => downloadOriginal(selected)} type="button">
                   <Download size={16} /> Download
                 </button>
-              </div>
-            </article>
-
-            <aside className="panel decision">
-              <div className="panelHeader">
-                <h3>Review Feedback</h3>
-                {selected.notified && (
-                  <span className="notified">
-                    <Bell size={14} /> Notified
-                  </span>
+                {userEmail === "admin@cvreview.com" && (
+                  <button
+                    className="danger"
+                    onClick={() => handleDeleteCandidate(selected.id)}
+                    type="button"
+                  >
+                    <Trash2 size={16} /> Remove CV
+                  </button>
                 )}
               </div>
-              <label className="field">
-                <span>Reviewer email</span>
-                <input
-                  disabled
-                  value={selected.reviewer || userEmail || ""}
-                />
-              </label>
-              <label className="field">
-                <span>Comments</span>
-                <textarea
-                  onChange={(event) => updateSelected({ comments: event.target.value })}
-                  placeholder="Add comments or decision rationale"
-                  value={selected.comments}
-                />
-              </label>
-              <div className="actions">
-                <button onClick={() => submitAction("accepted")} type="button">
+            </div>
+
+            {/* CV preview — takes maximum available space */}
+            {selected.parseWarning && (
+              <p className="parseWarning">{selected.parseWarning}</p>
+            )}
+            <div className="cvViewerFull" aria-label="Original CV preview">
+              {selected.previewUrl && (selected.previewMethod.includes("pdf") || selected.previewUrl !== selected.objectUrl) ? (
+                <iframe className="pdfFrameFull" src={selected.previewUrl} title={selected.fileName} />
+              ) : selected.rawText ? (
+                <pre className="originalTextFull">{selected.rawText}</pre>
+              ) : (
+                <div className="blankState compact">
+                  <FileText size={34} />
+                  <h2>Preview unavailable</h2>
+                  <p>Open or download the original file to review it.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom: Comments + Action buttons */}
+            <div className="reviewBottomBar">
+              <div className="reviewCommentsArea">
+                <label className="field">
+                  <span>Comments</span>
+                  <textarea
+                    onChange={(event) => updateSelected({ comments: event.target.value })}
+                    placeholder="Add comments or decision rationale"
+                    value={selected.comments}
+                    rows={3}
+                  />
+                </label>
+              </div>
+              <div className="reviewActionsRow">
+                <button className="actionBtn accept" onClick={() => submitAction("accepted")} type="button">
                   <Check size={17} /> Accept
                 </button>
-                <button onClick={() => submitAction("accepted_with_comments")} type="button">
+                <button className="actionBtn acceptComments" onClick={() => submitAction("accepted_with_comments")} type="button">
                   <MessageSquare size={17} /> Accept with comments
                 </button>
-                <button onClick={() => submitAction("comments_only")} type="button">
+                <button className="actionBtn commentsOnly" onClick={() => submitAction("comments_only")} type="button">
                   <MessageSquare size={17} /> Comments only
                 </button>
-                <button className="danger" onClick={() => submitAction("rejected")} type="button">
+                <button className="actionBtn danger" onClick={() => submitAction("rejected")} type="button">
                   <X size={17} /> Reject
                 </button>
               </div>
-              {isSending && <p className="sending">Sending notification...</p>}
-            </aside>
+              {isSending && <p className="sending">Saving review...</p>}
+            </div>
           </div>
         ) : (
           <div className="blankState">

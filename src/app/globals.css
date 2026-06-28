@@ -297,7 +297,7 @@ dd {
   color: #7a4a00;
   font-size: 13px;
   line-height: 1.45;
-  margin: 14px 0 0;
+  margin: 0;
   padding: 10px 12px;
 }
 
@@ -358,15 +358,145 @@ pre {
   color: var(--primary);
 }
 
-.documentViewport {
-  background: #e8edf5;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  max-height: 760px;
-  overflow: auto;
-  padding: 22px;
+/* ── Vertical Review Layout ── */
+.verticalReviewLayout {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: calc(100vh - 180px);
 }
 
+.cvTopBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 0 0;
+  padding: 12px 18px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cvTopBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cvTopBarLeft h3 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.reviewerTag {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* CV viewer — fills available vertical space */
+.cvViewerFull {
+  background: #e8edf5;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  flex: 1;
+  min-height: 500px;
+  overflow: hidden;
+}
+
+.pdfFrameFull {
+  background: #fff;
+  border: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: calc(100vh - 380px);
+}
+
+.originalTextFull {
+  background: #fff;
+  border: 0;
+  border-radius: 0;
+  color: #111827;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  min-height: calc(100vh - 380px);
+  padding: 28px;
+  white-space: pre-wrap;
+  margin: 0;
+  overflow: auto;
+}
+
+/* Bottom review bar: comments + action buttons */
+.reviewBottomBar {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 0 0 10px 10px;
+  padding: 14px 18px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.reviewCommentsArea {
+  flex: 1;
+  min-width: 200px;
+}
+
+.reviewCommentsArea textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.reviewActionsRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.actionBtn {
+  align-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  display: flex;
+  font-weight: 700;
+  gap: 6px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: filter 0.15s;
+  white-space: nowrap;
+}
+
+.actionBtn:hover {
+  filter: brightness(0.9);
+}
+
+.actionBtn.accept {
+  background: #10b981;
+}
+
+.actionBtn.acceptComments {
+  background: #059669;
+}
+
+.actionBtn.commentsOnly {
+  background: #d97706;
+}
+
+.actionBtn.danger {
+  background: var(--danger);
+}
+
+/* Keep old styles for backward compat */
 .cvViewer {
   background: #e8edf5;
   border: 1px solid var(--line);
@@ -1065,3 +1195,105 @@ pre {
 .statCard.rejected .statValue {
   color: var(--danger);
 }
+
+/* ── Admin Notifications Panel ── */
+.adminNotificationsPanel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.notifHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--foreground);
+}
+
+.notifList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.notifItem {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--background);
+  transition: box-shadow 0.2s;
+}
+.notifItem:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.notifItem.accepted { border-left: 3px solid #10b981; }
+.notifItem.accepted_with_comments { border-left: 3px solid #059669; }
+.notifItem.comments_only { border-left: 3px solid #d97706; }
+.notifItem.rejected { border-left: 3px solid var(--danger); }
+
+.notifTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.notifReviewer {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.notifStatus {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.notifCandidate {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.notifComments {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--foreground);
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  line-height: 1.4;
+}
+
+/* Danger button in document toolbar */
+.documentToolbar .danger {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.documentToolbar .danger:hover {
+  background: #a02828;
+}
+
