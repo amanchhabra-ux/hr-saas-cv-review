@@ -16,6 +16,7 @@ export async function GET(
       headers: {
         "Content-Type": previewData.mimeType,
         "Content-Disposition": "inline",
+        "Accept-Ranges": "bytes",
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });

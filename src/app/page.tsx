@@ -228,6 +228,12 @@ export default function Home() {
   
   const [toast, setToast] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [viewMode, setViewMode] = useState<"preview" | "text">("preview");
+
+  // Reset viewMode when selected candidate changes
+  useEffect(() => {
+    setViewMode("preview");
+  }, [selectedId]);
 
   // Load user session on start
   useEffect(() => {
@@ -974,6 +980,11 @@ export default function Home() {
                 <button onClick={() => downloadOriginal(selected)} type="button">
                   <Download size={16} /> Download
                 </button>
+                {selected.rawText && (
+                  <button onClick={() => setViewMode(viewMode === "preview" ? "text" : "preview")} type="button">
+                    <FileText size={16} /> {viewMode === "preview" ? "Text View" : "Original View"}
+                  </button>
+                )}
                 {userEmail === "admin@cvreview.com" && (
                   <button
                     className="danger"
@@ -991,7 +1002,7 @@ export default function Home() {
               <p className="parseWarning">{selected.parseWarning}</p>
             )}
             <div className="cvViewerFull" aria-label="Original CV preview">
-              {selected.previewUrl && (selected.previewMethod.includes("pdf") || selected.previewUrl !== selected.objectUrl) ? (
+              {viewMode === "preview" && selected.previewUrl && (selected.previewMethod.includes("pdf") || selected.previewUrl !== selected.objectUrl) ? (
                 <iframe className="pdfFrameFull" src={selected.previewUrl} title={selected.fileName} />
               ) : selected.rawText ? (
                 <pre className="originalTextFull">{selected.rawText}</pre>
