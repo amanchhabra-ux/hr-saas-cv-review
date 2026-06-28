@@ -240,15 +240,23 @@ export default function Home() {
 
   // Generate object URL for preview to bypass Acrobat extension network interception
   const selectedPreviewUrl = candidates.find((c) => c.id === selectedId)?.previewUrl;
+  const selectedPreviewMime = candidates.find((c) => c.id === selectedId)?.previewMimeType;
+  const selectedFileMime = candidates.find((c) => c.id === selectedId)?.fileMimeType;
+
   useEffect(() => {
     let active = true;
     if (selectedPreviewUrl) {
       setIsBlobLoading(true);
       setLocalBlobUrl(null);
       fetch(selectedPreviewUrl)
-        .then((res) => res.blob())
-        .then((blob) => {
+        .then((res) => res.arrayBuffer())
+        .then((buffer) => {
           if (active) {
+            // Force strict MIME type to prevent browsers interpreting PDF binaries as UTF-8 text
+            const explicitType = selectedPreviewUrl.endsWith("/file")
+              ? (selectedFileMime || "application/pdf")
+              : (selectedPreviewMime || "application/pdf");
+            const blob = new Blob([buffer], { type: explicitType });
             const url = URL.createObjectURL(blob);
             setLocalBlobUrl(url);
             setIsBlobLoading(false);
@@ -264,7 +272,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [selectedPreviewUrl]);
+  }, [selectedPreviewUrl, selectedPreviewMime, selectedFileMime]);
 
   // Load user session on start
   useEffect(() => {
