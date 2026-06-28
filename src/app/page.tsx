@@ -13,7 +13,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { ChangeEvent, useMemo, useState } from "react";
+import { ChangeEvent, useMemo, useState, useEffect } from "react";
 
 type ReviewAction =
   | "accepted"
@@ -39,6 +39,10 @@ type Candidate = {
   reviewer: string;
   notified: boolean;
   discipline: "Electrical" | "Civil" | "Mechanical" | "Planning" | "HSE" | "General";
+  fileBase64?: string;
+  fileMimeType?: string;
+  previewBase64?: string;
+  previewMimeType?: string;
 };
 
 const statusLabel: Record<Candidate["status"], string> = {
@@ -156,6 +160,14 @@ function base64ToObjectUrl(base64: string, mimeType: string) {
 }
 
 export default function Home() {
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [enteredOtp, setEnteredOtp] = useState("");
+  const [devOtp, setDevOtp] = useState<string | null>(null);
+  const [authError, setAuthError] = useState("");
+  const [loadingAuth, setLoadingAuth] = useState(false);
+
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [query, setQuery] = useState("");
@@ -165,6 +177,43 @@ export default function Home() {
   const [notifyEmail, setNotifyEmail] = useState("");
   const [toast, setToast] = useState("");
   const [isSending, setIsSending] = useState(false);
+
+  // Load user session on start
+  useEffect(() => {
+    const saved = localStorage.getItem("user_email");
+    if (saved) {
+      setUserEmail(saved);
+      fetchCandidates(saved);
+    }
+  }, []);
+
+  async function fetchCandidates(email: string) {
+    try {
+      const res = await fetch(`/api/candidates?email=${encodeURIComponent(email)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const loaded = (data.candidates as Candidate[]).map((c) => {
+          const objectUrl = c.fileBase64 
+            ? base64ToObjectUrl(c.fileBase64, c.fileMimeType || "application/octet-stream")
+            : "";
+          const previewUrl = c.previewBase64
+            ? base64ToObjectUrl(c.previewBase64, c.previewMimeType || "text/html")
+            : objectUrl;
+          return {
+            ...c,
+            objectUrl,
+            previewUrl,
+          };
+        });
+        setCandidates(loaded);
+        if (loaded.length > 0) {
+          setSelectedId(loaded[0].id);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load candidates", e);
+    }
+  }
 
   const filtered = useMemo(
     () =>
@@ -190,8 +239,84 @@ export default function Home() {
   );
   const selected = candidates.find((candidate) => candidate.id === selectedId) || candidates[0];
 
+  async function handleAuthSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setAuthError("");
+    setLoadingAuth(true);
+
+    if (!otpSent) {
+      try {
+        const res = await fetch("/api/auth/send-otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: loginEmail.trim() }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setOtpSent(true);
+          setDevOtp(data.otp || null);
+          setToast("OTP sent successfully!");
+        } else {
+          setAuthError(data.message || "Failed to send OTP");
+        }
+      } catch (err) {
+        setAuthError("Network error. Please try again.");
+      }
+    } else {
+      try {
+        const res = await fetch("/api/auth/verify-otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: loginEmail.trim(), otp: enteredOtp.trim() }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          localStorage.setItem("user_email", data.email);
+          setUserEmail(data.email);
+          fetchCandidates(data.email);
+          setToast("Logged in successfully!");
+        } else {
+          setAuthError(data.message || "Invalid or expired OTP");
+        }
+      } catch (err) {
+        setAuthError("Network error. Please try again.");
+      }
+    }
+    setLoadingAuth(false);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("user_email");
+    setUserEmail(null);
+    setCandidates([]);
+    setSelectedId("");
+    setLoginEmail("");
+    setOtpSent(false);
+    setEnteredOtp("");
+    setDevOtp(null);
+    setToast("Logged out successfully");
+  }
+
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
+    if (!userEmail) return;
     const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    // Convert files to base64 strings
+    const fileBase64s = await Promise.all(
+      files.map((file) => {
+        return new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            const base64 = result.split(",")[1];
+            resolve(base64);
+          };
+          reader.readAsDataURL(file);
+        });
+      })
+    );
+
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
 
@@ -239,7 +364,7 @@ export default function Home() {
       rendered = [];
     }
 
-    const uploaded = files.map((file) => {
+    const uploaded = files.map((file, idx) => {
       const parsedFile = parsed.find((item) => item.fileName === file.name);
       const renderedFile = rendered.find(
         (item) =>
@@ -270,8 +395,21 @@ export default function Home() {
         reviewer: "",
         notified: false,
         discipline: detectDiscipline(file.name, text),
+        fileBase64: fileBase64s[idx],
+        fileMimeType: file.type || "application/octet-stream",
+        previewBase64: renderedFile?.base64,
+        previewMimeType: renderedFile?.mimeType,
       };
     });
+
+    // Save candidates to server
+    for (const candidate of uploaded) {
+      await fetch("/api/candidates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail, candidate }),
+      }).catch((err) => console.error("Failed to persist candidate to server", err));
+    }
 
     setCandidates((current) => [...uploaded, ...current]);
     setSelectedId(uploaded[0]?.id || selectedId);
@@ -280,21 +418,44 @@ export default function Home() {
   }
 
   function updateSelected(changes: Partial<Candidate>) {
-    if (!selected) return;
+    if (!selected || !userEmail) return;
+    const finalChanges = {
+      ...changes,
+      reviewer: userEmail,
+    };
     setCandidates((current) =>
       current.map((candidate) =>
-        candidate.id === selected.id ? { ...candidate, ...changes } : candidate,
+        candidate.id === selected.id ? { ...candidate, ...finalChanges } : candidate,
       ),
     );
+    // Persist edits to server database
+    fetch(`/api/candidates/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        changes: finalChanges,
+      }),
+    }).catch((err) => console.error("Failed to update candidate on server", err));
   }
 
   async function submitAction(action: ReviewAction) {
-    if (!selected) return;
+    if (!selected || !userEmail) return;
     setIsSending(true);
-    const next = { ...selected, status: action, notified: true };
+    const next = { ...selected, status: action, reviewer: userEmail, notified: true };
     setCandidates((current) =>
       current.map((candidate) => (candidate.id === selected.id ? next : candidate)),
     );
+
+    // Save status changes to server
+    await fetch(`/api/candidates/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        changes: { status: action, reviewer: userEmail, notified: true },
+      }),
+    }).catch((err) => console.error("Failed to update candidate status on server", err));
 
     const response = await fetch("/api/notify", {
       method: "POST",
@@ -311,6 +472,79 @@ export default function Home() {
     const result = await response.json();
     setIsSending(false);
     setToast(result.mode === "sent" ? "Notification email sent" : result.message);
+  }
+
+  if (!userEmail) {
+    return (
+      <main className="loginContainer">
+        <div className="loginCard">
+          <div className="loginHeader">
+            <div className="brandMark">C</div>
+            <h2>CV Review Console</h2>
+            <p>Access your shared review workspace</p>
+          </div>
+          
+          <form onSubmit={handleAuthSubmit} className="loginForm">
+            {authError && <div className="authError">{authError}</div>}
+            
+            {!otpSent ? (
+              <>
+                <label className="field">
+                  <span>Enter your Email Address</span>
+                  <div className="inputIcon">
+                    <Mail size={18} />
+                    <input
+                      type="email"
+                      required
+                      placeholder="you@company.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                    />
+                  </div>
+                </label>
+                <button type="submit" disabled={loadingAuth} className="loginButton">
+                  {loadingAuth ? "Sending OTP..." : "Get Instant OTP"}
+                </button>
+              </>
+            ) : (
+              <>
+                <label className="field">
+                  <span>Enter 6-digit OTP Code</span>
+                  <div className="inputIcon">
+                    <CheckCircle2 size={18} />
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      placeholder="123456"
+                      value={enteredOtp}
+                      onChange={(e) => setEnteredOtp(e.target.value)}
+                    />
+                  </div>
+                </label>
+                
+                {devOtp && (
+                  <div className="devOtpNotice">
+                    <strong>[Dev Mode]</strong> Your OTP is: <code>{devOtp}</code>
+                  </div>
+                )}
+                
+                <button type="submit" disabled={loadingAuth} className="loginButton">
+                  {loadingAuth ? "Verifying..." : "Verify & Login"}
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => { setOtpSent(false); setEnteredOtp(""); }} 
+                  className="resendButton"
+                >
+                  Change Email
+                </button>
+              </>
+            )}
+          </form>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -393,6 +627,15 @@ export default function Home() {
           ))}
           {!filtered.length && <p className="empty">No CVs in the review queue yet.</p>}
         </div>
+
+        <div className="sidebarFooter">
+          <div className="userInfo">
+            <span className="userSessionEmail" title={userEmail}>{userEmail}</span>
+          </div>
+          <button onClick={handleLogout} className="logoutBtn" type="button">
+            Log out
+          </button>
+        </div>
       </section>
 
       <section className="workspace">
@@ -451,11 +694,10 @@ export default function Home() {
                 )}
               </div>
               <label className="field">
-                <span>Reviewer name</span>
+                <span>Reviewer email</span>
                 <input
-                  onChange={(event) => updateSelected({ reviewer: event.target.value })}
-                  placeholder="Customer reviewer"
-                  value={selected.reviewer}
+                  disabled
+                  value={selected.reviewer || userEmail || ""}
                 />
               </label>
               <label className="field">
