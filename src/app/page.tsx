@@ -371,6 +371,27 @@ export default function Home() {
     }
   }
 
+  async function handleRemoveProject(project: string) {
+    if (!confirm(`Are you sure you want to remove project "${project}"?`)) return;
+    try {
+      const res = await fetch(`/api/projects?project=${encodeURIComponent(project)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.projects) {
+          setProjects(data.projects);
+          setToast(`Project "${project}" removed`);
+          if (selectedProjectFilter === project) {
+            setSelectedProjectFilter("All");
+          }
+        }
+      }
+    } catch {
+      setToast("Failed to remove project");
+    }
+  }
+
   async function handleAuthSubmit(e: React.FormEvent) {
     e.preventDefault();
     setAuthError("");
@@ -656,8 +677,8 @@ export default function Home() {
       <main className="loginContainer">
         <div className="loginCard">
           <div className="loginHeader">
-            <div className="brandMark">C</div>
-            <h2>CV Review Console</h2>
+            <div className="brandMark">N</div>
+            <h2>NESTKI CONSULTING</h2>
             <p>Access workspaces & candidate uploads</p>
           </div>
           
@@ -728,9 +749,9 @@ export default function Home() {
     <main className="shell">
       <section className="sidebar" aria-label="Candidate queue">
         <div className="brand">
-          <div className="brandMark">C</div>
+          <div className="brandMark">N</div>
           <div>
-            <h1>{userEmail === "admin@cvreview.com" ? "Admin Console" : "CV Review"}</h1>
+            <h1>{userEmail === "admin@cvreview.com" ? "NESTKI Admin" : "NESTKI CONSULTING"}</h1>
             <p>{userEmail === "admin@cvreview.com" ? "Review all user & guest uploads" : "Upload and record candidate decisions"}</p>
           </div>
         </div>
@@ -786,16 +807,26 @@ export default function Home() {
           </label>
           
           {showProjectEditor && (
-            <div className="newProjectForm">
-              <input
-                type="text"
-                placeholder="New project name..."
-                value={customProjectInput}
-                onChange={(e) => setCustomProjectInput(e.target.value)}
-              />
-              <div className="newProjectActions">
-                <button type="button" className="cancel" onClick={() => setShowProjectEditor(false)}>Cancel</button>
-                <button type="button" className="create" onClick={handleCreateProject} disabled={!customProjectInput.trim()}>Create</button>
+            <div className="projectManagerBox">
+              <div className="projectManagerList">
+                {projects.map((p) => (
+                  <div key={p} className="projectManagerItem">
+                    <span>{p}</span>
+                    <button type="button" className="removeProjectBtn" onClick={() => handleRemoveProject(p)} aria-label={`Remove ${p}`}>×</button>
+                  </div>
+                ))}
+              </div>
+              <div className="newProjectForm">
+                <input
+                  type="text"
+                  placeholder="New project name..."
+                  value={customProjectInput}
+                  onChange={(e) => setCustomProjectInput(e.target.value)}
+                />
+                <div className="newProjectActions">
+                  <button type="button" className="cancel" onClick={() => setShowProjectEditor(false)}>Close</button>
+                  <button type="button" className="create" onClick={handleCreateProject} disabled={!customProjectInput.trim()}>Add</button>
+                </div>
               </div>
             </div>
           )}

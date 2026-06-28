@@ -26,3 +26,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Server error" }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const project = searchParams.get("project");
+    
+    if (!project) {
+      return NextResponse.json({ message: "Project name is required" }, { status: 400 });
+    }
+    const { removeProject } = await import('../../../lib/db');
+    const projects = await removeProject(project);
+    return NextResponse.json({ success: true, projects });
+  } catch (error) {
+    console.error("Failed to remove project:", error);
+    return NextResponse.json({ message: "Server error" }, { status: 500 });
+  }
+}

@@ -179,6 +179,15 @@ export async function addProject(project: string): Promise<string[]> {
   return db.projects;
 }
 
+export async function removeProject(project: string): Promise<string[]> {
+  const db = await readDb();
+  if (!db.projects) return [];
+  const cleanProject = project.trim();
+  db.projects = db.projects.filter(p => p !== cleanProject);
+  await writeDb(db);
+  return db.projects;
+}
+
 export async function saveCandidates(userEmail: string, candidates: DbCandidate[]): Promise<void> {
   const db = await readDb();
   db.candidates = candidates;
