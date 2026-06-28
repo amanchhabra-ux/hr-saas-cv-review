@@ -396,6 +396,92 @@ pre {
   font-style: italic;
 }
 
+/* Tag Editor */
+.tagEditorWrapper {
+  position: relative;
+}
+
+.tagEditorBtn {
+  cursor: pointer;
+  display: flex !important;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 0.15s;
+}
+.tagEditorBtn:hover {
+  opacity: 0.8;
+}
+
+.tagDropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  padding: 6px;
+  min-width: 180px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tagOption {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.tagOption:hover {
+  background: var(--background);
+}
+.tagOption.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.tagCustomInput {
+  display: flex;
+  gap: 4px;
+  padding: 4px 4px 2px;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+}
+
+.tagCustomInput input {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.tagCustomInput button {
+  background: var(--primary);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tagCustomInput button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* CV viewer — fills available vertical space */
 .cvViewerFull {
   background: #e8edf5;

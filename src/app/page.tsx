@@ -10,6 +10,7 @@ import {
   Mail,
   MessageSquare,
   Search,
+  Tag,
   Trash2,
   Upload,
   X,
@@ -39,7 +40,7 @@ type Candidate = {
   comments: string;
   reviewer: string;
   notified: boolean;
-  discipline: "Electrical" | "Civil" | "Mechanical" | "Planning" | "HSE" | "General";
+  discipline: string;
   fileBase64?: string;
   fileMimeType?: string;
   previewBase64?: string;
@@ -123,7 +124,9 @@ function getEmail(text: string) {
   return text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || "";
 }
 
-function detectDiscipline(fileName: string, text: string): Candidate["discipline"] {
+const PRESET_TAGS = ["Electrical", "Civil", "Mechanical", "Planning", "HSE", "General"];
+
+function detectDiscipline(fileName: string, text: string): string {
   const fileAndText = `${fileName} ${text}`.toLowerCase();
   
   if (/\b(electrical|electricity|electrician|electronics|power\s+systems|telecom|scada)\b/.test(fileAndText)) {
@@ -173,9 +176,9 @@ export default function Home() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [query, setQuery] = useState("");
-  const [selectedDiscipline, setSelectedDiscipline] = useState<
-    "All" | "Electrical" | "Civil" | "Mechanical" | "Planning" | "HSE"
-  >("All");
+  const [selectedDiscipline, setSelectedDiscipline] = useState("All");
+  const [customTagInput, setCustomTagInput] = useState("");
+  const [showTagEditor, setShowTagEditor] = useState(false);
   const [toast, setToast] = useState("");
   const [isSending, setIsSending] = useState(false);
 
@@ -215,6 +218,17 @@ export default function Home() {
       console.error("Failed to load candidates", e);
     }
   }
+
+  // Collect all unique tags (preset + custom) from candidates
+  const allTags = useMemo(() => {
+    const tagSet = new Set(PRESET_TAGS);
+    candidates.forEach((c) => {
+      if (c.discipline && !tagSet.has(c.discipline)) {
+        tagSet.add(c.discipline);
+      }
+    });
+    return Array.from(tagSet);
+  }, [candidates]);
 
   const filtered = useMemo(
     () =>
@@ -631,14 +645,14 @@ export default function Home() {
         </div>
 
         <div className="disciplineFilters" aria-label="Discipline filters">
-          {(["All", "Electrical", "Civil", "Mechanical", "Planning", "HSE"] as const).map((discipline) => (
+          {["All", ...allTags].map((tag) => (
             <button
-              key={discipline}
-              onClick={() => setSelectedDiscipline(discipline)}
-              className={`filterPill ${selectedDiscipline === discipline ? "active" : ""}`}
+              key={tag}
+              onClick={() => setSelectedDiscipline(tag)}
+              className={`filterPill ${selectedDiscipline === tag ? "active" : ""}`}
               type="button"
             >
-              {discipline}
+              {tag}
             </button>
           ))}
         </div>
@@ -763,6 +777,61 @@ export default function Home() {
                 {selected.reviewer && selected.reviewer !== userEmail && (
                   <span className="reviewerTag">Reviewed by {selected.reviewer}</span>
                 )}
+                <div className="tagEditorWrapper">
+                  <button
+                    className={`badge ${selected.discipline.toLowerCase()} tagEditorBtn`}
+                    onClick={() => setShowTagEditor(!showTagEditor)}
+                    type="button"
+                    title="Change tag"
+                  >
+                    <Tag size={12} /> {selected.discipline}
+                  </button>
+                  {showTagEditor && (
+                    <div className="tagDropdown">
+                      {PRESET_TAGS.map((tag) => (
+                        <button
+                          key={tag}
+                          className={`tagOption ${selected.discipline === tag ? "active" : ""}`}
+                          onClick={() => {
+                            updateSelected({ discipline: tag } as Partial<Candidate>);
+                            setShowTagEditor(false);
+                          }}
+                          type="button"
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                      <div className="tagCustomInput">
+                        <input
+                          type="text"
+                          placeholder="Custom tag..."
+                          value={customTagInput}
+                          onChange={(e) => setCustomTagInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && customTagInput.trim()) {
+                              updateSelected({ discipline: customTagInput.trim() } as Partial<Candidate>);
+                              setCustomTagInput("");
+                              setShowTagEditor(false);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={!customTagInput.trim()}
+                          onClick={() => {
+                            if (customTagInput.trim()) {
+                              updateSelected({ discipline: customTagInput.trim() } as Partial<Candidate>);
+                              setCustomTagInput("");
+                              setShowTagEditor(false);
+                            }
+                          }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="documentToolbar" style={{ margin: 0 }}>
                 <button onClick={() => openOriginal(selected)} type="button">
