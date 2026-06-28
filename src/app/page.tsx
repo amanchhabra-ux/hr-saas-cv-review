@@ -247,10 +247,11 @@ export default function Home() {
           setProjects(data.projects);
         }
         const loaded = (data.candidates as Candidate[]).map((c) => {
+          const hasPreview = c.previewMethod && c.previewMethod !== "original-file" && c.previewMethod !== "not-renderable" && c.previewMethod !== "render-failed";
           return {
             ...c,
             objectUrl: `/api/candidates/${c.id}/file`,
-            previewUrl: `/api/candidates/${c.id}/preview`,
+            previewUrl: hasPreview ? `/api/candidates/${c.id}/preview` : `/api/candidates/${c.id}/file`,
           };
         });
         setCandidates(loaded);
@@ -499,6 +500,7 @@ export default function Home() {
       );
       const text = parsedFile?.text || "";
       const id = crypto.randomUUID();
+      const hasPreview = renderedFile?.base64 && renderedFile.method !== "original-file" && renderedFile.method !== "not-renderable" && renderedFile.method !== "render-failed";
       return {
         id,
         fileName: file.name,
@@ -507,7 +509,7 @@ export default function Home() {
         email: getEmail(text),
         fileType: file.type || file.name.split(".").pop()?.toUpperCase() || "Unknown",
         objectUrl: `/api/candidates/${id}/file`,
-        previewUrl: `/api/candidates/${id}/preview`,
+        previewUrl: hasPreview ? `/api/candidates/${id}/preview` : `/api/candidates/${id}/file`,
         previewMethod: renderedFile?.method || "original-file",
         rawText: text,
         parseMethod: parsedFile?.method || "original-file",
