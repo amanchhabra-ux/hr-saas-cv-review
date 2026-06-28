@@ -80,17 +80,35 @@ export async function updateCandidate(
   candidateId: string,
   changes: Partial<DbCandidate>,
 ): Promise<DbCandidate | null> {
-  const candidates = await getCandidates(userEmail);
+  const db = await readDb();
+  const lowerEmail = userEmail.toLowerCase();
+  const isAdmin = lowerEmail === "admin@cvreview.com";
+  
   let updated: DbCandidate | null = null;
-  const next = candidates.map((c) => {
-    if (c.id === candidateId) {
-      updated = { ...c, ...changes };
-      return updated;
+  
+  if (isAdmin) {
+    for (const email of Object.keys(db.users)) {
+      const list = db.users[email];
+      const index = list.findIndex((c) => c.id === candidateId);
+      if (index !== -1) {
+        updated = { ...list[index], ...changes };
+        list[index] = updated;
+        db.users[email] = list;
+        break;
+      }
     }
-    return c;
-  });
+  } else {
+    const list = db.users[lowerEmail] || [];
+    const index = list.findIndex((c) => c.id === candidateId);
+    if (index !== -1) {
+      updated = { ...list[index], ...changes };
+      list[index] = updated;
+      db.users[lowerEmail] = list;
+    }
+  }
+  
   if (updated) {
-    await saveCandidates(userEmail, next);
+    await writeDb(db);
   }
   return updated;
 }

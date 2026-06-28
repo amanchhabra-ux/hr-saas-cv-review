@@ -867,3 +867,201 @@ pre {
   border-color: #f8b4b4;
   color: var(--danger);
 }
+
+/* Login Tab Container & Buttons */
+.tabContainer {
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  display: flex;
+  margin-bottom: 24px;
+  padding: 4px;
+}
+
+.tabBtn {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #94a3b8;
+  flex: 1;
+  font-size: 14px;
+  font-weight: 700;
+  height: 38px;
+  transition: all 0.15s ease;
+}
+
+.tabBtn:hover {
+  color: #f8fafc;
+}
+
+.tabBtn.active {
+  background: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Public Upload Card styling */
+.publicUploadContainer {
+  display: flex;
+  flex-direction: column;
+}
+
+.publicUploadInstructions {
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.uploadBox.public {
+  background: rgba(15, 23, 42, 0.4);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #f8fafc;
+  cursor: pointer;
+  padding: 40px 20px;
+  transition: border-color 0.15s ease;
+}
+
+.uploadBox.public:hover {
+  border-color: #3b82f6;
+}
+
+.uploadBox.public small {
+  color: #94a3b8;
+}
+
+.uploadSuccessCard {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: center;
+}
+
+.successIcon {
+  color: #10b981;
+}
+
+.uploadSuccessCard h3 {
+  color: #f8fafc;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.uploadSuccessCard p {
+  color: #94a3b8;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.uploadSpinnerCard {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 40px;
+  text-align: center;
+}
+
+.uploadSpinnerCard p {
+  color: #cbd5e1;
+  font-size: 14px;
+}
+
+.spinner {
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  height: 36px;
+  width: 36px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Admin Role Badge */
+.adminRoleBadge {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
+  color: #d97706;
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 4px;
+  padding: 2px 6px;
+  text-transform: uppercase;
+  width: fit-content;
+  letter-spacing: 0.05em;
+}
+
+/* Admin Dashboard Metrics Grid */
+.adminStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.statCard {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+}
+
+.statCard .statValue {
+  color: var(--foreground);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.statCard .statLabel {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Color indicators for stats cards matching statuses */
+.statCard.accepted {
+  border-left: 4px solid #10b981;
+}
+.statCard.accepted .statValue {
+  color: #10b981;
+}
+
+.statCard.accepted_comments {
+  border-left: 4px solid #059669;
+}
+.statCard.accepted_comments .statValue {
+  color: #059669;
+}
+
+.statCard.comments_only {
+  border-left: 4px solid #d97706;
+}
+.statCard.comments_only .statValue {
+  color: #d97706;
+}
+
+.statCard.rejected {
+  border-left: 4px solid var(--danger);
+}
+.statCard.rejected .statValue {
+  color: var(--danger);
+}
