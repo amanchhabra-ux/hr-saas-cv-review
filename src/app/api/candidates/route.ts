@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCandidates, addCandidate, getProjects } from "../../../lib/db";
+import { getCandidates, getProjects } from "../../../lib/db";
 
 export const dynamic = 'force-dynamic';
 
@@ -23,15 +23,24 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { email, candidate } = await request.json();
-    if (!email || !candidate) {
-      return NextResponse.json({ message: "Email and candidate data are required" }, { status: 400 });
+    const { email, candidate, candidates } = await request.json();
+    if (!email) {
+      return NextResponse.json({ message: "Email is required" }, { status: 400 });
     }
     
-    await addCandidate(email, candidate);
-    return NextResponse.json({ success: true, candidate });
+    if (candidates && Array.isArray(candidates)) {
+      const { addCandidates } = await import('../../../lib/db');
+      await addCandidates(email, candidates);
+      return NextResponse.json({ success: true, count: candidates.length });
+    } else if (candidate) {
+      const { addCandidates } = await import('../../../lib/db');
+      await addCandidates(email, [candidate]);
+      return NextResponse.json({ success: true, candidate });
+    }
+    
+    return NextResponse.json({ message: "Candidate data required" }, { status: 400 });
   } catch (error) {
-    console.error("Failed to add candidate:", error);
+    console.error("Failed to add candidate(s):", error);
     return NextResponse.json({ message: "Server error adding candidate" }, { status: 500 });
   }
 }

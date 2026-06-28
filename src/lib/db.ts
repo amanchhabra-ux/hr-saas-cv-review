@@ -196,54 +196,57 @@ export async function saveCandidates(userEmail: string, candidates: DbCandidate[
   await writeDb(db);
 }
 
-export async function addCandidate(userEmail: string, candidate: DbCandidate): Promise<void> {
+export async function addCandidates(userEmail: string, newCandidates: DbCandidate[]): Promise<void> {
   const db = await readDb();
   
-  const { fileBase64, fileMimeType, previewBase64, previewMimeType } = candidate;
-  
-  const newCand = { 
-    ...candidate, 
-    uploaderEmail: userEmail,
-    project: candidate.project || "",
-  };
-  delete newCand.fileBase64;
-  delete newCand.previewBase64;
-  
-  if (fileBase64) {
-    const fileBuffer = Buffer.from(fileBase64, 'base64');
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
-      const { put } = await import('@vercel/blob');
-      await put(`candidates/${candidate.id}/file`, fileBuffer, {
-        access: 'private',
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        contentType: fileMimeType || 'application/octet-stream',
-      });
-    } else {
-      const fileDir = path.join(DATA_DIR, 'files');
-      await fs.mkdir(fileDir, { recursive: true });
-      await fs.writeFile(path.join(fileDir, candidate.id), fileBuffer);
+  for (const candidate of newCandidates) {
+    const { fileBase64, fileMimeType, previewBase64, previewMimeType } = candidate;
+    
+    const newCand = { 
+      ...candidate, 
+      uploaderEmail: userEmail,
+      project: candidate.project || "",
+    };
+    delete newCand.fileBase64;
+    delete newCand.previewBase64;
+    
+    if (fileBase64) {
+      const fileBuffer = Buffer.from(fileBase64, 'base64');
+      if (process.env.BLOB_READ_WRITE_TOKEN) {
+        const { put } = await import('@vercel/blob');
+        await put(`candidates/${candidate.id}/file`, fileBuffer, {
+          access: 'private',
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          contentType: fileMimeType || 'application/octet-stream',
+        });
+      } else {
+        const fileDir = path.join(DATA_DIR, 'files');
+        await fs.mkdir(fileDir, { recursive: true });
+        await fs.writeFile(path.join(fileDir, candidate.id), fileBuffer);
+      }
     }
+    
+    if (previewBase64) {
+      const previewBuffer = Buffer.from(previewBase64, 'base64');
+      if (process.env.BLOB_READ_WRITE_TOKEN) {
+        const { put } = await import('@vercel/blob');
+        await put(`candidates/${candidate.id}/preview`, previewBuffer, {
+          access: 'private',
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          contentType: previewMimeType || 'text/html',
+        });
+      } else {
+        const previewDir = path.join(DATA_DIR, 'previews');
+        await fs.mkdir(previewDir, { recursive: true });
+        await fs.writeFile(path.join(previewDir, candidate.id), previewBuffer);
+      }
+    }
+    
+    db.candidates.unshift(newCand);
   }
   
-  if (previewBase64) {
-    const previewBuffer = Buffer.from(previewBase64, 'base64');
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
-      const { put } = await import('@vercel/blob');
-      await put(`candidates/${candidate.id}/preview`, previewBuffer, {
-        access: 'private',
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        contentType: previewMimeType || 'text/html',
-      });
-    } else {
-      const previewDir = path.join(DATA_DIR, 'previews');
-      await fs.mkdir(previewDir, { recursive: true });
-      await fs.writeFile(path.join(previewDir, candidate.id), previewBuffer);
-    }
-  }
-  
-  db.candidates.unshift(newCand);
   await writeDb(db);
 }
 

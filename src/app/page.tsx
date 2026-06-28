@@ -594,14 +594,12 @@ export default function Home() {
       };
     });
 
-    // Save candidates to server
-    for (const candidate of uploaded) {
-      await fetch("/api/candidates", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: userEmail, candidate }),
-      }).catch((err) => console.error("Failed to persist candidate to server", err));
-    }
+    // Save all candidates to server in a single batched transaction to prevent race conditions
+    await fetch("/api/candidates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: userEmail, candidates: uploaded }),
+    }).catch((err) => console.error("Failed to persist candidates to server", err));
 
     setCandidates((current) => [...uploaded, ...current]);
     setSelectedId(uploaded[0]?.id || selectedId);
