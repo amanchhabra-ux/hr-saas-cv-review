@@ -1065,3 +1065,12 @@ pre {
 .statCard.rejected .statValue {
   color: var(--danger);
 }
+
+/* Responsive and dynamic workspace grid layouts */
+.reviewGrid.adminView {
+  grid-template-columns: minmax(0, 1fr) 380px;
+}
+
+.reviewGrid.userView {
+  grid-template-columns: 1fr;
+}

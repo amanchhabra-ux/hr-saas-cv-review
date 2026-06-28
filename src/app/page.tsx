@@ -874,11 +874,13 @@ export default function Home() {
         </div>
 
         {selected ? (
-          <div className="reviewGrid">
+          <div className={`reviewGrid ${userEmail === "admin@cvreview.com" ? "adminView" : "userView"}`}>
             <article className="panel adb">
               <div className="panelHeader">
                 <h3>Original CV</h3>
-                <span className={`badge ${selected.status}`}>{statusLabel[selected.status]}</span>
+                {userEmail === "admin@cvreview.com" && (
+                  <span className={`badge ${selected.status}`}>{statusLabel[selected.status]}</span>
+                )}
               </div>
               {selected.parseWarning && (
                 <p className="parseWarning">{selected.parseWarning}</p>
@@ -906,46 +908,48 @@ export default function Home() {
               </div>
             </article>
 
-            <aside className="panel decision">
-              <div className="panelHeader">
-                <h3>Review Feedback</h3>
-                {selected.notified && (
-                  <span className="notified">
-                    <Bell size={14} /> Notified
-                  </span>
-                )}
-              </div>
-              <label className="field">
-                <span>Reviewer email</span>
-                <input
-                  disabled
-                  value={selected.reviewer || userEmail || ""}
-                />
-              </label>
-              <label className="field">
-                <span>Comments</span>
-                <textarea
-                  onChange={(event) => updateSelected({ comments: event.target.value })}
-                  placeholder="Add comments or decision rationale"
-                  value={selected.comments}
-                />
-              </label>
-              <div className="actions">
-                <button onClick={() => submitAction("accepted")} type="button">
-                  <Check size={17} /> Accept
-                </button>
-                <button onClick={() => submitAction("accepted_with_comments")} type="button">
-                  <MessageSquare size={17} /> Accept with comments
-                </button>
-                <button onClick={() => submitAction("comments_only")} type="button">
-                  <MessageSquare size={17} /> Comments only
-                </button>
-                <button className="danger" onClick={() => submitAction("rejected")} type="button">
-                  <X size={17} /> Reject
-                </button>
-              </div>
-              {isSending && <p className="sending">Sending notification...</p>}
-            </aside>
+            {userEmail === "admin@cvreview.com" && (
+              <aside className="panel decision">
+                <div className="panelHeader">
+                  <h3>Review Feedback</h3>
+                  {selected.notified && (
+                    <span className="notified">
+                      <Bell size={14} /> Notified
+                    </span>
+                  )}
+                </div>
+                <label className="field">
+                  <span>Reviewer email</span>
+                  <input
+                    disabled
+                    value={selected.reviewer || userEmail || ""}
+                  />
+                </label>
+                <label className="field">
+                  <span>Comments</span>
+                  <textarea
+                    onChange={(event) => updateSelected({ comments: event.target.value })}
+                    placeholder="Add comments or decision rationale"
+                    value={selected.comments}
+                  />
+                </label>
+                <div className="actions">
+                  <button onClick={() => submitAction("accepted")} type="button">
+                    <Check size={17} /> Accept
+                  </button>
+                  <button onClick={() => submitAction("accepted_with_comments")} type="button">
+                    <MessageSquare size={17} /> Accept with comments
+                  </button>
+                  <button onClick={() => submitAction("comments_only")} type="button">
+                    <MessageSquare size={17} /> Comments only
+                  </button>
+                  <button className="danger" onClick={() => submitAction("rejected")} type="button">
+                    <X size={17} /> Reject
+                  </button>
+                </div>
+                {isSending && <p className="sending">Sending notification...</p>}
+              </aside>
+            )}
           </div>
         ) : (
           <div className="blankState">
