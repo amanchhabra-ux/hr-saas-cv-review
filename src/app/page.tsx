@@ -230,10 +230,41 @@ export default function Home() {
   const [isSending, setIsSending] = useState(false);
   const [viewMode, setViewMode] = useState<"preview" | "text">("preview");
 
+  const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
+  const [isBlobLoading, setIsBlobLoading] = useState(false);
+
   // Reset viewMode when selected candidate changes
   useEffect(() => {
     setViewMode("preview");
   }, [selectedId]);
+
+  // Generate object URL for preview to bypass Acrobat extension network interception
+  const selectedPreviewUrl = candidates.find((c) => c.id === selectedId)?.previewUrl;
+  useEffect(() => {
+    let active = true;
+    if (selectedPreviewUrl) {
+      setIsBlobLoading(true);
+      setLocalBlobUrl(null);
+      fetch(selectedPreviewUrl)
+        .then((res) => res.blob())
+        .then((blob) => {
+          if (active) {
+            const url = URL.createObjectURL(blob);
+            setLocalBlobUrl(url);
+            setIsBlobLoading(false);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch local blob:", err);
+          if (active) setIsBlobLoading(false);
+        });
+    } else {
+      setLocalBlobUrl(null);
+    }
+    return () => {
+      active = false;
+    };
+  }, [selectedPreviewUrl]);
 
   // Load user session on start
   useEffect(() => {
@@ -1003,7 +1034,13 @@ export default function Home() {
             )}
             <div className="cvViewerFull" aria-label="Original CV preview">
               {viewMode === "preview" && selected.previewUrl && (selected.previewMethod.includes("pdf") || selected.previewUrl !== selected.objectUrl) ? (
-                <iframe className="pdfFrameFull" src={selected.previewUrl} title={selected.fileName} />
+                isBlobLoading ? (
+                  <div className="blankState compact">
+                    <p>Loading document preview...</p>
+                  </div>
+                ) : (
+                  <iframe className="pdfFrameFull" src={localBlobUrl || selected.previewUrl} title={selected.fileName} />
+                )
               ) : selected.rawText ? (
                 <pre className="originalTextFull">{selected.rawText}</pre>
               ) : (
