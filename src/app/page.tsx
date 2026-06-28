@@ -975,7 +975,14 @@ export default function Home() {
             {/* Top bar: status badge + Open / Download / Remove */}
             <div className="cvTopBar">
               <div className="cvTopBarLeft">
-                <h3>{selected.displayName}</h3>
+                <input
+                  type="text"
+                  className="editableNameInput"
+                  value={selected.displayName}
+                  onChange={(e) => updateSelected({ displayName: e.target.value } as Partial<Candidate>)}
+                  aria-label="Edit Candidate Name"
+                  title="Edit Candidate Name"
+                />
                 <span className={`badge ${selected.status}`}>{statusLabel[selected.status]}</span>
                 {selected.reviewer && selected.reviewer !== userEmail && (
                   <span className="reviewerTag">Reviewed by {selected.reviewer}</span>
