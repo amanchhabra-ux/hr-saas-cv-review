@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCandidates, addCandidate } from "../../../lib/db";
+import { getCandidates, addCandidate, getProjects } from "../../../lib/db";
 
 export async function GET(request: Request) {
   try {
@@ -11,7 +11,8 @@ export async function GET(request: Request) {
     }
     
     const candidates = await getCandidates(email);
-    return NextResponse.json({ candidates });
+    const projects = await getProjects();
+    return NextResponse.json({ candidates, projects });
   } catch (error) {
     console.error("Failed to fetch candidates:", error);
     return NextResponse.json({ message: "Server error fetching candidates" }, { status: 500 });

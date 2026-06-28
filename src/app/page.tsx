@@ -41,6 +41,7 @@ type Candidate = {
   reviewer: string;
   notified: boolean;
   discipline: string;
+  project?: string;
   fileBase64?: string;
   fileMimeType?: string;
   previewBase64?: string;
@@ -124,7 +125,22 @@ function getEmail(text: string) {
   return text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || "";
 }
 
-const PRESET_TAGS = ["Electrical", "Civil", "Mechanical", "Planning", "HSE", "General"];
+const PRESET_TAGS = [
+  "Electrical",
+  "Civil",
+  "HSE",
+  "Planning and reporting",
+  "Billing",
+  "MIS documentation",
+  "Project controller",
+  "Project manager",
+  "Drone Services",
+  "Contracts and Procurement",
+  "Qa/QC Engineer",
+  "Telecom",
+  "Surveyor",
+  "others"
+];
 
 function detectDiscipline(fileName: string, text: string): string {
   const fileAndText = `${fileName} ${text}`.toLowerCase();
@@ -135,17 +151,41 @@ function detectDiscipline(fileName: string, text: string): string {
   if (/\b(civil|structural|concrete|geotechnical|construction\s+engineering|foundation|steel\s+structures)\b/.test(fileAndText)) {
     return "Civil";
   }
-  if (/\b(mechanical|mechnical|hvac|piping|thermodynamics|automotive|rotary|static\s+equipment|plumbing)\b/.test(fileAndText)) {
-    return "Mechanical";
-  }
-  if (/\b(planning|planner|scheduler|scheduling|primavera|msp|project\s+control|delay\s+analysis)\b/.test(fileAndText)) {
-    return "Planning";
-  }
   if (/\b(hse|safety\s+officer|health\s+safety|environment|environmental|safety\s+engineer|osha|nebosh|hazard|risk\s+assessment)\b/.test(fileAndText)) {
     return "HSE";
   }
+  if (/\b(planning|planner|scheduler|scheduling|primavera|msp|project\s+control|delay\s+analysis)\b/.test(fileAndText)) {
+    return "Planning and reporting";
+  }
+  if (/\b(billing|invoice|rate|cost|payment)\b/.test(fileAndText)) {
+    return "Billing";
+  }
+  if (/\b(mis|report|dashboard|data\s+analyst|documentation)\b/.test(fileAndText)) {
+    return "MIS documentation";
+  }
+  if (/\b(controller|coordinator)\b/.test(fileAndText)) {
+    return "Project controller";
+  }
+  if (/\b(manager|lead|director|pm)\b/.test(fileAndText)) {
+    return "Project manager";
+  }
+  if (/\b(drone|uav|pilot|aerial)\b/.test(fileAndText)) {
+    return "Drone Services";
+  }
+  if (/\b(procurement|contract|purchasing|buyer|sourcing)\b/.test(fileAndText)) {
+    return "Contracts and Procurement";
+  }
+  if (/\b(qa|qc|quality|testing|inspection)\b/.test(fileAndText)) {
+    return "Qa/QC Engineer";
+  }
+  if (/\b(telecom|telecommunication|network|cisco|wireless)\b/.test(fileAndText)) {
+    return "Telecom";
+  }
+  if (/\b(surveyor|survey|geodetic|gis|mapping)\b/.test(fileAndText)) {
+    return "Surveyor";
+  }
   
-  return "General";
+  return "others";
 }
 
 function downloadOriginal(candidate: Candidate) {
@@ -176,9 +216,16 @@ export default function Home() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [query, setQuery] = useState("");
+  
+  const [projects, setProjects] = useState<string[]>(["Reliance TL project"]);
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState("All");
   const [selectedDiscipline, setSelectedDiscipline] = useState("All");
   const [customTagInput, setCustomTagInput] = useState("");
   const [showTagEditor, setShowTagEditor] = useState(false);
+  
+  const [showProjectEditor, setShowProjectEditor] = useState(false);
+  const [customProjectInput, setCustomProjectInput] = useState("");
+  
   const [toast, setToast] = useState("");
   const [isSending, setIsSending] = useState(false);
 
@@ -196,17 +243,14 @@ export default function Home() {
       const res = await fetch(`/api/candidates?email=${encodeURIComponent(email)}`);
       if (res.ok) {
         const data = await res.json();
+        if (data.projects) {
+          setProjects(data.projects);
+        }
         const loaded = (data.candidates as Candidate[]).map((c) => {
-          const objectUrl = c.fileBase64 
-            ? base64ToObjectUrl(c.fileBase64, c.fileMimeType || "application/octet-stream")
-            : "";
-          const previewUrl = c.previewBase64
-            ? base64ToObjectUrl(c.previewBase64, c.previewMimeType || "text/html")
-            : objectUrl;
           return {
             ...c,
-            objectUrl,
-            previewUrl,
+            objectUrl: `/api/candidates/${c.id}/file`,
+            previewUrl: `/api/candidates/${c.id}/preview`,
           };
         });
         setCandidates(loaded);
@@ -240,20 +284,46 @@ export default function Home() {
           candidate.fileType,
           candidate.status,
           candidate.discipline,
+          candidate.project || "",
           candidate.uploaderEmail || "",
         ]
           .join(" ")
           .toLowerCase()
           .includes(query.toLowerCase());
 
+        const matchesProject =
+          selectedProjectFilter === "All" || candidate.project === selectedProjectFilter;
+
         const matchesDiscipline =
           selectedDiscipline === "All" || candidate.discipline === selectedDiscipline;
 
-        return matchesSearch && matchesDiscipline;
+        return matchesSearch && matchesProject && matchesDiscipline;
       }),
-    [candidates, query, selectedDiscipline],
+    [candidates, query, selectedProjectFilter, selectedDiscipline],
   );
   const selected = candidates.find((candidate) => candidate.id === selectedId) || candidates[0];
+
+  async function handleCreateProject() {
+    if (!customProjectInput.trim() || !userEmail) return;
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: customProjectInput.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.projects) {
+          setProjects(data.projects);
+          setToast(`Project "${customProjectInput.trim()}" created successfully`);
+          setCustomProjectInput("");
+          setShowProjectEditor(false);
+        }
+      }
+    } catch {
+      setToast("Failed to create project");
+    }
+  }
 
   async function handleAuthSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -428,19 +498,16 @@ export default function Home() {
           item.fileName === `${file.name.replace(/\.[^.]+$/, "")}.html`,
       );
       const text = parsedFile?.text || "";
-      const originalUrl = URL.createObjectURL(file);
-      const previewUrl = renderedFile?.base64
-        ? base64ToObjectUrl(renderedFile.base64, renderedFile.mimeType)
-        : originalUrl;
+      const id = crypto.randomUUID();
       return {
-        id: crypto.randomUUID(),
+        id,
         fileName: file.name,
         uploadedAt: new Date().toISOString(),
         displayName: getDisplayName(file.name, text),
         email: getEmail(text),
         fileType: file.type || file.name.split(".").pop()?.toUpperCase() || "Unknown",
-        objectUrl: originalUrl,
-        previewUrl,
+        objectUrl: `/api/candidates/${id}/file`,
+        previewUrl: `/api/candidates/${id}/preview`,
         previewMethod: renderedFile?.method || "original-file",
         rawText: text,
         parseMethod: parsedFile?.method || "original-file",
@@ -450,10 +517,11 @@ export default function Home() {
         reviewer: "",
         notified: false,
         discipline: detectDiscipline(file.name, text),
+        project: selectedProjectFilter !== "All" ? selectedProjectFilter : (projects[0] || "Reliance TL project"),
         fileBase64: fileBase64s[idx],
         fileMimeType: file.type || "application/octet-stream",
         previewBase64: renderedFile?.base64,
-        previewMimeType: renderedFile?.mimeType,
+        previewMimeType: renderedFile?.mimeType || "text/html",
         uploaderEmail: userEmail,
       };
     });
@@ -644,7 +712,49 @@ export default function Home() {
           />
         </div>
 
+        {/* Project Filter Section */}
+        <div className="projectFilterSection">
+          <label className="field">
+            <span>Filter by Project</span>
+            <div className="projectFilterSelectWrapper">
+              <select
+                value={selectedProjectFilter}
+                onChange={(e) => setSelectedProjectFilter(e.target.value)}
+                className="projectSelect"
+              >
+                <option value="All">All Projects</option>
+                {projects.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              <button 
+                type="button" 
+                className="addProjectBtn"
+                onClick={() => setShowProjectEditor(!showProjectEditor)}
+              >
+                +
+              </button>
+            </div>
+          </label>
+          
+          {showProjectEditor && (
+            <div className="newProjectForm">
+              <input
+                type="text"
+                placeholder="New project name..."
+                value={customProjectInput}
+                onChange={(e) => setCustomProjectInput(e.target.value)}
+              />
+              <div className="newProjectActions">
+                <button type="button" className="cancel" onClick={() => setShowProjectEditor(false)}>Cancel</button>
+                <button type="button" className="create" onClick={handleCreateProject} disabled={!customProjectInput.trim()}>Create</button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="disciplineFilters" aria-label="Discipline filters">
+          <span className="sectionLabel">Filter by Sub-section:</span>
           {["All", ...allTags].map((tag) => (
             <button
               key={tag}
@@ -673,9 +783,14 @@ export default function Home() {
                     <> · by {candidate.uploaderEmail.replace("@cvreview.com", "").replace("@company.com", "")}</>
                   )}
                 </small>
-                <span className={`badge ${candidate.discipline.toLowerCase()}`}>
-                  {candidate.discipline}
-                </span>
+                <div className="rowBadges">
+                  <span className={`badge projectBadge`}>
+                    {candidate.project || "Reliance TL project"}
+                  </span>
+                  <span className={`badge ${candidate.discipline.toLowerCase().replace(/[^a-z0-9]/g, "")}`}>
+                    {candidate.discipline}
+                  </span>
+                </div>
               </span>
             </button>
           ))}
@@ -777,9 +892,24 @@ export default function Home() {
                 {selected.reviewer && selected.reviewer !== userEmail && (
                   <span className="reviewerTag">Reviewed by {selected.reviewer}</span>
                 )}
+                
+                {/* Project Tag Editor */}
+                <div className="projectDropdownWrapper">
+                  <select
+                    value={selected.project || "Reliance TL project"}
+                    onChange={(e) => updateSelected({ project: e.target.value } as Partial<Candidate>)}
+                    className="candidateProjectSelect"
+                  >
+                    {projects.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Sub-section Tag Editor */}
                 <div className="tagEditorWrapper">
                   <button
-                    className={`badge ${selected.discipline.toLowerCase()} tagEditorBtn`}
+                    className={`badge ${selected.discipline.toLowerCase().replace(/[^a-z0-9]/g, "")} tagEditorBtn`}
                     onClick={() => setShowTagEditor(!showTagEditor)}
                     type="button"
                     title="Change tag"
