@@ -723,6 +723,7 @@ export default function Home() {
                 className="projectSelect"
               >
                 <option value="All">All Projects</option>
+                <option value="">No Project</option>
                 {projects.map((p) => (
                   <option key={p} value={p}>{p}</option>
                 ))}
@@ -896,10 +897,11 @@ export default function Home() {
                 {/* Project Tag Editor */}
                 <div className="projectDropdownWrapper">
                   <select
-                    value={selected.project || "Reliance TL project"}
+                    value={selected.project || ""}
                     onChange={(e) => updateSelected({ project: e.target.value } as Partial<Candidate>)}
                     className="candidateProjectSelect"
                   >
+                    <option value="">No Project</option>
                     {projects.map((p) => (
                       <option key={p} value={p}>{p}</option>
                     ))}

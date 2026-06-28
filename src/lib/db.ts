@@ -116,10 +116,10 @@ function migrateDb(parsed: DbData): DbData {
     delete parsed.users;
   }
 
-  // Ensure all candidates have a default project
+  // Ensure all candidates have a project property
   parsed.candidates.forEach((c) => {
-    if (!c.project) {
-      c.project = "Reliance TL project";
+    if (c.project === undefined) {
+      c.project = "";
     }
   });
 
@@ -147,6 +147,7 @@ export async function writeDb(data: DbData): Promise<void> {
       const res = await put('db.json', jsonContent, {
         access: 'private',
         addRandomSuffix: false,
+        allowOverwrite: true,
         contentType: 'application/json',
       });
       cachedBlobUrl = res.url;
@@ -198,7 +199,7 @@ export async function addCandidate(userEmail: string, candidate: DbCandidate): P
   const newCand = { 
     ...candidate, 
     uploaderEmail: userEmail,
-    project: candidate.project || "Reliance TL project",
+    project: candidate.project || "",
   };
   delete newCand.fileBase64;
   delete newCand.previewBase64;
@@ -210,6 +211,7 @@ export async function addCandidate(userEmail: string, candidate: DbCandidate): P
       await put(`candidates/${candidate.id}/file`, fileBuffer, {
         access: 'private',
         addRandomSuffix: false,
+        allowOverwrite: true,
         contentType: fileMimeType || 'application/octet-stream',
       });
     } else {
@@ -226,6 +228,7 @@ export async function addCandidate(userEmail: string, candidate: DbCandidate): P
       await put(`candidates/${candidate.id}/preview`, previewBuffer, {
         access: 'private',
         addRandomSuffix: false,
+        allowOverwrite: true,
         contentType: previewMimeType || 'text/html',
       });
     } else {
@@ -289,16 +292,20 @@ export async function deleteCandidate(candidateId: string): Promise<boolean> {
 export async function getCandidateFile(candidateId: string): Promise<{ data: Buffer; mimeType: string } | null> {
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      const { list } = await import('@vercel/blob');
-      const { blobs } = await list({ prefix: `candidates/${candidateId}/file` });
+      const { list, get } = await import('@vercel/blob');
+      const prefix = `candidates/${candidateId}/file`;
+      const { blobs } = await list({ prefix });
       if (blobs[0]) {
-        const res = await fetch(blobs[0].url);
-        if (res.ok) {
-          const arrayBuffer = await res.arrayBuffer();
+        const res = await get(blobs[0].url, { access: 'private', token: process.env.BLOB_READ_WRITE_TOKEN });
+        if (res && res.stream) {
+          const chunks = [];
+          for await (const chunk of res.stream as any) {
+            chunks.push(chunk as Uint8Array);
+          }
           const db = await readDb();
           const candidate = db.candidates.find(c => c.id === candidateId);
           return {
-            data: Buffer.from(arrayBuffer),
+            data: Buffer.concat(chunks),
             mimeType: candidate?.fileMimeType || 'application/octet-stream',
           };
         }
@@ -325,16 +332,20 @@ export async function getCandidateFile(candidateId: string): Promise<{ data: Buf
 export async function getCandidatePreview(candidateId: string): Promise<{ data: Buffer; mimeType: string } | null> {
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      const { list } = await import('@vercel/blob');
-      const { blobs } = await list({ prefix: `candidates/${candidateId}/preview` });
+      const { list, get } = await import('@vercel/blob');
+      const prefix = `candidates/${candidateId}/preview`;
+      const { blobs } = await list({ prefix });
       if (blobs[0]) {
-        const res = await fetch(blobs[0].url);
-        if (res.ok) {
-          const arrayBuffer = await res.arrayBuffer();
+        const res = await get(blobs[0].url, { access: 'private', token: process.env.BLOB_READ_WRITE_TOKEN });
+        if (res && res.stream) {
+          const chunks = [];
+          for await (const chunk of res.stream as any) {
+            chunks.push(chunk as Uint8Array);
+          }
           const db = await readDb();
           const candidate = db.candidates.find(c => c.id === candidateId);
           return {
-            data: Buffer.from(arrayBuffer),
+            data: Buffer.concat(chunks),
             mimeType: candidate?.previewMimeType || 'text/html',
           };
         }
