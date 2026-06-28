@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server";
 import mammoth from "mammoth";
-import path from "path";
-import { pathToFileURL } from "url";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
 import WordExtractor from "word-extractor";
+import pdfParse from "pdf-parse";
 
 export const runtime = "nodejs";
-
-GlobalWorkerOptions.workerSrc = pathToFileURL(
-  path.join(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"),
-).href;
 
 type ParsedCv = {
   fileName: string;
@@ -46,26 +40,8 @@ async function extractLegacyWord(buffer: Buffer) {
 }
 
 async function extractPdfText(buffer: Buffer) {
-  const document = await getDocument({
-    data: new Uint8Array(buffer),
-  }).promise;
-
-  try {
-    const pages: string[] = [];
-    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-      const page = await document.getPage(pageNumber);
-      const content = await page.getTextContent();
-      pages.push(
-        content.items
-          .map((item) => ("str" in item ? item.str : ""))
-          .filter(Boolean)
-          .join(" "),
-      );
-    }
-    return cleanText(pages.join("\n"));
-  } finally {
-    await document.destroy();
-  }
+  const data = await pdfParse(buffer);
+  return cleanText(data.text);
 }
 
 async function extractText(file: File): Promise<ParsedCv> {
@@ -77,7 +53,7 @@ async function extractText(file: File): Promise<ParsedCv> {
     return {
       fileName: file.name,
       text,
-      method: "pdfjs-dist",
+      method: "pdf-parse",
       warning: hasReadableText(text)
         ? undefined
         : "No readable text was found. This PDF may be scanned and need OCR.",
