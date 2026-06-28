@@ -800,9 +800,20 @@ export default function Home() {
                 type="button" 
                 className="addProjectBtn"
                 onClick={() => setShowProjectEditor(!showProjectEditor)}
+                title="Manage Projects"
               >
                 +
               </button>
+              {selectedProjectFilter !== "All" && selectedProjectFilter !== "" && (
+                <button
+                  type="button"
+                  className="removeProjectBtnTop"
+                  onClick={() => handleRemoveProject(selectedProjectFilter)}
+                  title="Remove Selected Project"
+                >
+                  -
+                </button>
+              )}
             </div>
           </label>
           

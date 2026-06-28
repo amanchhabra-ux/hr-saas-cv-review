@@ -1427,6 +1427,26 @@ pre {
   cursor: pointer;
 }
 
+.removeProjectBtnTop {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.removeProjectBtnTop:hover {
+  background: #a02828;
+}
+
 .newProjectForm {
   display: flex;
   flex-direction: column;
