@@ -1,6 +1,7 @@
 import { unstable_noStore as noStore } from 'next/cache';
 import { promises as fs } from "fs";
 import path from "path";
+import { TataCvData, parseTataCv } from "./cvParser";
 
 const DATA_DIR = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "data");
 const DB_FILE = path.join(DATA_DIR, "db.json");
@@ -29,6 +30,7 @@ export interface DbCandidate {
   previewBase64?: string;
   previewMimeType?: string;
   uploaderEmail?: string;
+  tataData?: TataCvData;
 }
 
 interface DbData {
@@ -112,10 +114,17 @@ function migrateDb(parsed: DbData): DbData {
     delete parsed.users;
   }
 
-  // Ensure all candidates have a project property
+  // Ensure all candidates have a project property and tataData is populated
   parsed.candidates.forEach((c) => {
     if (c.project === undefined) {
       c.project = "";
+    }
+    if (!c.tataData && c.rawText) {
+      try {
+        c.tataData = parseTataCv(c.rawText, c.displayName);
+      } catch (e) {
+        console.error(`parseTataCv failed for candidate ${c.id}:`, e);
+      }
     }
   });
 

@@ -9,13 +9,18 @@ import {
   FileText,
   Mail,
   MessageSquare,
+  Printer,
+  RefreshCw,
   Search,
   Tag,
   Trash2,
   Upload,
   X,
+  FileDown,
 } from "lucide-react";
 import React, { ChangeEvent, useMemo, useState, useEffect, useRef } from "react";
+import { TataCvData, parseTataCv } from "../lib/cvParser";
+import TataCvPreview from "./components/TataCvPreview";
 
 type ReviewAction =
   | "accepted"
@@ -23,7 +28,7 @@ type ReviewAction =
   | "rejected"
   | "comments_only";
 
-type Candidate = {
+export type Candidate = {
   id: string;
   fileName: string;
   uploadedAt: string;
@@ -47,6 +52,8 @@ type Candidate = {
   previewBase64?: string;
   previewMimeType?: string;
   uploaderEmail?: string;
+  tataData?: TataCvData;
+  industry?: string;
 };
 
 const statusLabel: Record<Candidate["status"], string> = {
@@ -228,7 +235,13 @@ export default function Home() {
   
   const [toast, setToast] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [viewMode, setViewMode] = useState<"preview" | "text">("preview");
+  const [viewMode, setViewMode] = useState<"preview" | "text" | "tata">("preview");
+
+  const DEFAULT_INDUSTRIES = ["Transmission", "Substation", "Distribution", "Hydro", "Solar", "Wind"];
+  const [industries, setIndustries] = useState<string[]>(DEFAULT_INDUSTRIES);
+  const [selectedIndustry, setSelectedIndustry] = useState("All");
+  const [customIndustryInput, setCustomIndustryInput] = useState("");
+  const [showIndustryEditor, setShowIndustryEditor] = useState(false);
 
   const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
   const [isBlobLoading, setIsBlobLoading] = useState(false);
@@ -332,6 +345,7 @@ export default function Home() {
           candidate.discipline,
           candidate.project || "",
           candidate.uploaderEmail || "",
+          candidate.industry || "",
         ]
           .join(" ")
           .toLowerCase()
@@ -340,12 +354,9 @@ export default function Home() {
         const matchesProject =
           selectedProjectFilter === "All" || candidate.project === selectedProjectFilter;
 
-        const matchesDiscipline =
-          selectedDiscipline === "All" || candidate.discipline === selectedDiscipline;
-
-        return matchesSearch && matchesProject && matchesDiscipline;
+        return matchesSearch && matchesProject;
       }),
-    [candidates, query, selectedProjectFilter, selectedDiscipline],
+    [candidates, query, selectedProjectFilter],
   );
   const selected = candidates.find((candidate) => candidate.id === selectedId) || candidates[0];
 
@@ -618,6 +629,7 @@ export default function Home() {
         previewBase64: renderedFile?.base64,
         previewMimeType: renderedFile?.mimeType || "text/html",
         uploaderEmail: userEmail,
+        tataData: parseTataCv(text, getDisplayName(file.name, text)),
       };
     });
 
@@ -868,20 +880,6 @@ export default function Home() {
           )}
         </div>
 
-        <div className="disciplineFilters" aria-label="Discipline filters">
-          <span className="sectionLabel">Filter by Sub-section:</span>
-          {["All", ...allTags].map((tag) => (
-            <button
-              key={tag}
-              onClick={() => setSelectedDiscipline(tag)}
-              className={`filterPill ${selectedDiscipline === tag ? "active" : ""}`}
-              type="button"
-            >
-              {tag}
-            </button>
-          ))}
-        </div>
-
         <div className="queueHeader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="sectionLabel">CV Queue:</span>
           {userEmail === "admin@cvreview.com" && candidates.length > 0 && (
@@ -898,10 +896,18 @@ export default function Home() {
         </div>
         <div className="queue">
           {filtered.map((candidate) => (
-            <button
+            <div
               className={`candidateRow ${selected?.id === candidate.id ? "active" : ""}`}
               key={candidate.id}
               onClick={() => setSelectedId(candidate.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setSelectedId(candidate.id);
+                }
+              }}
             >
               <FileText size={18} />
               <span>
@@ -916,12 +922,27 @@ export default function Home() {
                   <span className={`badge projectBadge`}>
                     {candidate.project || "Reliance TL project"}
                   </span>
+                  {candidate.industry && (
+                    <span className="badge" style={{ background: '#fef3c7', color: '#92400e' }}>
+                      {candidate.industry}
+                    </span>
+                  )}
                   <span className={`badge ${candidate.discipline.toLowerCase().replace(/[^a-z0-9]/g, "")}`}>
                     {candidate.discipline}
                   </span>
+                  {(candidate.status === "accepted_with_comments" || candidate.status === "comments_only" || candidate.comments) ? (
+                    <span className="badge queueCommentBubble" title={candidate.comments || "Commented"}>
+                      <MessageSquare size={10} />
+                    </span>
+                  ) : null}
+                  {candidate.status === "accepted" ? (
+                    <span className="badge queueAcceptBubble" title="Accepted">
+                      <CheckCircle2 size={10} />
+                    </span>
+                  ) : null}
                 </div>
               </span>
-            </button>
+            </div>
           ))}
           {!filtered.length && <p className="empty">No CVs in the review queue yet.</p>}
         </div>
@@ -998,6 +1019,8 @@ export default function Home() {
           )}
           </>
         )}
+
+
 
         <div className="topbar">
           <div>
@@ -1099,34 +1122,145 @@ export default function Home() {
                     </div>
                   )}
                 </div>
+
+                {/* Industry Tag Editor */}
+                <div className="projectDropdownWrapper">
+                  <select
+                    value={selected.industry || ""}
+                    onChange={(e) => updateSelected({ industry: e.target.value } as Partial<Candidate>)}
+                    className="candidateProjectSelect"
+                    title="Assign Industry"
+                  >
+                    <option value="">No Industry</option>
+                    {industries.map((ind) => (
+                      <option key={ind} value={ind}>{ind}</option>
+                    ))}
+                  </select>
+                </div>
+
               </div>
-              <div className="documentToolbar" style={{ margin: 0 }}>
-                <button onClick={() => openOriginal(selected)} type="button">
-                  <ExternalLink size={16} /> Open
-                </button>
-                <button onClick={() => downloadOriginal(selected)} type="button">
-                  <Download size={16} /> Download
+            </div>
+
+            {/* ── Document toolbar ── */}
+            <div className="docToolbar noPrint">
+              {/* Left: view-mode pill tabs */}
+              <div className="viewTabs">
+                <button
+                  className={`viewTab${viewMode === "preview" ? " activeViewTab" : ""}`}
+                  onClick={() => setViewMode("preview")}
+                  type="button"
+                >
+                  <FileText size={14} /> Original
                 </button>
                 {selected.rawText && (
-                  <button onClick={() => setViewMode(viewMode === "preview" ? "text" : "preview")} type="button">
-                    <FileText size={16} /> {viewMode === "preview" ? "Text View" : "Original View"}
+                  <button
+                    className={`viewTab${viewMode === "text" ? " activeViewTab" : ""}`}
+                    onClick={() => setViewMode("text")}
+                    type="button"
+                  >
+                    Text
                   </button>
                 )}
+                <button
+                  className={`viewTab${viewMode === "tata" ? " activeViewTab" : ""}`}
+                  onClick={() => setViewMode("tata")}
+                  type="button"
+                >
+                  TATA CV
+                </button>
+              </div>
+
+              {/* Right: context-sensitive actions */}
+              <div className="docActions">
+                {viewMode !== "tata" && (
+                  <>
+                    <button onClick={() => openOriginal(selected)} type="button" className="docBtn">
+                      <ExternalLink size={15} /> Open
+                    </button>
+                    <button onClick={() => downloadOriginal(selected)} type="button" className="docBtn">
+                      <Download size={15} /> Download
+                    </button>
+                  </>
+                )}
+
+                {viewMode === "tata" && (
+                  <>
+                    <button
+                      type="button"
+                      className="docBtn syncBtn"
+                      title="Re-parse experience section from the original CV text"
+                      onClick={() => {
+                        if (confirm("Re-sync experience from CV? This will overwrite the Experience field.")) {
+                          const freshParsed = parseTataCv(selected.rawText, selected.displayName);
+                          updateSelected({
+                            tataData: {
+                              ...selected.tataData!,
+                              employmentRecordRaw: freshParsed.employmentRecordRaw,
+                              employmentRecord: freshParsed.employmentRecord,
+                            }
+                          });
+                        }
+                      }}
+                    >
+                      <RefreshCw size={15} /> Sync Experience
+                    </button>
+                    <button
+                      type="button"
+                      className="docBtn wordBtn"
+                      onClick={() => {
+                        const element = document.querySelector('.tataContainer');
+                        if (!element) return;
+                        const clone = element.cloneNode(true) as HTMLElement;
+                        const originalTextareas = element.querySelectorAll('textarea');
+                        clone.querySelectorAll('textarea').forEach((ta, i) => {
+                          const div = document.createElement('div');
+                          div.innerText = (originalTextareas[i] as HTMLTextAreaElement).value;
+                          div.style.whiteSpace = 'pre-wrap';
+                          ta.parentNode?.replaceChild(div, ta);
+                        });
+                        const originalInputs = element.querySelectorAll('input');
+                        clone.querySelectorAll('input').forEach((inp, i) => {
+                          const span = document.createElement('span');
+                          span.innerText = (originalInputs[i] as HTMLInputElement).value;
+                          inp.parentNode?.replaceChild(span, inp);
+                        });
+                        clone.querySelectorAll('.noPrint').forEach(el => el.parentNode?.removeChild(el));
+                        const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>TATA CV</title><style>body{font-family:Arial,sans-serif;font-size:11px}table{width:100%;border-collapse:collapse}td{padding:4px;border:1px solid #ccc;vertical-align:top}</style></head><body>${clone.innerHTML}</body></html>`;
+                        const a = document.createElement('a');
+                        a.href = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(html);
+                        a.download = `${selected.displayName || 'Candidate'}_TATA_CV.doc`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                      }}
+                    >
+                      <FileDown size={15} /> Export Word
+                    </button>
+                    <button
+                      type="button"
+                      className="docBtn printBtn"
+                      onClick={() => window.print()}
+                    >
+                      <Printer size={15} /> Print
+                    </button>
+                  </>
+                )}
+
                 {userEmail === "admin@cvreview.com" && (
                   <button
-                    className="danger"
+                    className="docBtn dangerBtn"
                     onClick={() => handleDeleteCandidate(selected.id)}
                     type="button"
                   >
-                    <Trash2 size={16} /> Remove CV
+                    <Trash2 size={15} /> Remove
                   </button>
                 )}
               </div>
             </div>
 
             {/* CV preview — takes maximum available space */}
-            {selected.parseWarning && (
-              <p className="parseWarning">{selected.parseWarning}</p>
+            {selected.parseWarning && viewMode !== "tata" && (
+              <p className="parseWarning noPrint">{selected.parseWarning}</p>
             )}
             <div className="cvViewerFull" aria-label="Original CV preview">
               {viewMode === "preview" && selected.previewUrl && (selected.previewMethod.includes("pdf") || selected.previewUrl !== selected.objectUrl) ? (
@@ -1137,8 +1271,10 @@ export default function Home() {
                 ) : (
                   <iframe className="pdfFrameFull" src={localBlobUrl || selected.previewUrl} title={selected.fileName} />
                 )
-              ) : selected.rawText ? (
+              ) : viewMode === "text" && selected.rawText ? (
                 <pre className="originalTextFull">{selected.rawText}</pre>
+              ) : viewMode === "tata" ? (
+                <TataCvPreview candidate={selected} updateSelected={updateSelected} />
               ) : (
                 <div className="blankState compact">
                   <FileText size={34} />
@@ -1148,34 +1284,42 @@ export default function Home() {
               )}
             </div>
 
+            {selected.comments && (
+              <div className="floatingCommentBubble noPrint">
+                <MessageSquare size={16} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--accent)' }} />
+                <div>
+                  <strong>Comments:</strong>
+                  <p style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap', fontSize: '13px' }}>{selected.comments}</p>
+                </div>
+              </div>
+            )}
+
             {/* Bottom: Comments + Action buttons */}
             <div className="reviewBottomBar">
               <div className="reviewCommentsArea">
-                <label className="field">
-                  <span>Comments</span>
-                  <textarea
-                    onChange={(event) => updateSelected({ comments: event.target.value })}
-                    placeholder="Add comments or decision rationale"
-                    value={selected.comments}
-                    rows={3}
-                  />
-                </label>
+                <textarea
+                  onChange={(event) => updateSelected({ comments: event.target.value })}
+                  placeholder="Add review comments or decision rationale..."
+                  value={selected.comments || ""}
+                  rows={1}
+                  className="compactCommentTextarea"
+                />
               </div>
               <div className="reviewActionsRow">
                 <button className="actionBtn accept" onClick={() => submitAction("accepted")} type="button">
-                  <Check size={17} /> Accept
+                  <Check size={14} /> Accept
                 </button>
                 <button className="actionBtn acceptComments" onClick={() => submitAction("accepted_with_comments")} type="button">
-                  <MessageSquare size={17} /> Accept with comments
+                  <MessageSquare size={14} /> Accept with comments
                 </button>
                 <button className="actionBtn commentsOnly" onClick={() => submitAction("comments_only")} type="button">
-                  <MessageSquare size={17} /> Comments only
+                  <MessageSquare size={14} /> Comments only
                 </button>
                 <button className="actionBtn danger" onClick={() => submitAction("rejected")} type="button">
-                  <X size={17} /> Reject
+                  <X size={14} /> Reject
                 </button>
               </div>
-              {isSending && <p className="sending">Saving review...</p>}
+              {isSending && <p className="sending" style={{ fontSize: '11px', margin: 0 }}>Saving...</p>}
             </div>
           </div>
         ) : (

@@ -44,8 +44,12 @@ button {
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 24px;
+  gap: 14px;
+  padding: 20px;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow: hidden;
 }
 
 .brand {
@@ -159,13 +163,17 @@ p {
 }
 
 .queue {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .candidateRow {
-  align-items: center;
+  align-items: flex-start;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -173,8 +181,17 @@ p {
   display: flex;
   gap: 10px;
   min-height: 58px;
-  padding: 10px;
+  height: auto;
+  padding: 12px 10px;
   text-align: left;
+  flex-shrink: 0;
+  cursor: pointer;
+  width: 100%;
+}
+
+.candidateRow > svg {
+  margin-top: 2px;
+  flex-shrink: 0;
 }
 
 .candidateRow.active,
@@ -184,9 +201,11 @@ p {
 }
 
 .candidateRow span {
-  display: grid;
-  gap: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
+  flex: 1;
 }
 
 .candidateRow strong,
@@ -197,20 +216,23 @@ p {
 }
 
 .workspace {
-  display: grid;
-  gap: 22px;
-  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  min-height: 100vh;
 }
 
 .topbar {
   align-items: center;
   display: flex;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .topbar h2 {
-  font-size: 30px;
-  margin-top: 5px;
+  font-size: 20px;
+  margin-top: 2px;
 }
 
 .metric,
@@ -358,12 +380,132 @@ pre {
   color: var(--primary);
 }
 
+/* ── Modern Document Toolbar ── */
+.docToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: none;
+  padding: 10px 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* View mode pill tabs */
+.viewTabs {
+  display: flex;
+  align-items: center;
+  background: var(--background);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.viewTab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.viewTab:hover {
+  color: var(--foreground);
+  background: rgba(36,87,197,0.06);
+}
+
+.viewTab.activeViewTab {
+  background: #fff;
+  color: var(--primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+/* Action buttons (right side of toolbar) */
+.docActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.docBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.docBtn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(36,87,197,0.04);
+}
+
+.docBtn.syncBtn {
+  border-color: #6366f1;
+  color: #6366f1;
+}
+
+.docBtn.syncBtn:hover {
+  background: rgba(99,102,241,0.08);
+}
+
+.docBtn.wordBtn {
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.docBtn.wordBtn:hover {
+  background: rgba(16,185,129,0.08);
+}
+
+.docBtn.printBtn {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.docBtn.printBtn:hover {
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+}
+
+.docBtn.dangerBtn {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.docBtn.dangerBtn:hover {
+  background: rgba(201,53,53,0.06);
+}
+
 /* ── Vertical Review Layout ── */
 .verticalReviewLayout {
   display: flex;
   flex-direction: column;
   gap: 0;
   min-height: calc(100vh - 180px);
+  position: relative;
 }
 
 .cvTopBar {
@@ -511,8 +653,7 @@ pre {
   border-left: 1px solid var(--line);
   border-right: 1px solid var(--line);
   flex: 1;
-  min-height: 500px;
-  overflow: hidden;
+  min-height: calc(100vh - 180px);
 }
 
 .pdfFrameFull {
@@ -521,7 +662,7 @@ pre {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: calc(100vh - 380px);
+  min-height: calc(100vh - 180px);
 }
 
 .originalTextFull {
@@ -532,7 +673,7 @@ pre {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 14px;
   line-height: 1.55;
-  min-height: calc(100vh - 380px);
+  min-height: calc(100vh - 180px);
   padding: 28px;
   white-space: pre-wrap;
   margin: 0;
@@ -544,10 +685,10 @@ pre {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 0 0 10px 10px;
-  padding: 14px 18px;
+  padding: 8px 14px;
   display: flex;
-  gap: 16px;
-  align-items: flex-end;
+  gap: 12px;
+  align-items: center;
   flex-wrap: wrap;
 }
 
@@ -556,30 +697,43 @@ pre {
   min-width: 200px;
 }
 
-.reviewCommentsArea textarea {
+.compactCommentTextarea {
   width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  outline: none;
   resize: vertical;
-  min-height: 60px;
+  min-height: 38px;
+  height: 38px;
+  background: #fff;
+  color: var(--foreground);
+}
+
+.compactCommentTextarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(36, 87, 197, 0.1);
 }
 
 .reviewActionsRow {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .actionBtn {
   align-items: center;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   color: #fff;
   display: flex;
   font-weight: 700;
-  gap: 6px;
+  gap: 4px;
   justify-content: center;
-  min-height: 40px;
-  padding: 8px 14px;
-  font-size: 13px;
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 12px;
   cursor: pointer;
   transition: filter 0.15s;
   white-space: nowrap;
@@ -847,6 +1001,138 @@ pre {
   background: var(--primary);
   border-color: var(--primary);
   color: #fff;
+}
+
+/* ── Workspace Filters Bar ── */
+.workspaceFiltersBar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 4px;
+}
+
+.filterGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filterGroupLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 85px;
+}
+
+.filterPills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filterPillWithRemove {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  background: #fff;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.filterPillWithRemove:hover {
+  border-color: #cbd5e1;
+}
+
+.filterPillWithRemove button {
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 12px;
+  transition: all 0.2s;
+}
+
+.filterPillWithRemove button.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.filterPillRemove {
+  padding: 6px 10px !important;
+  border-left: 1px solid var(--line) !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+}
+
+.filterPillRemove:hover {
+  background: #feecec !important;
+  color: var(--danger) !important;
+}
+
+.filterPillAdd {
+  background: #f1f5f9;
+  border: 1px dashed #cbd5e1;
+  border-radius: 100px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 4px 10px;
+  transition: all 0.2s;
+  line-height: 1.2;
+}
+
+.filterPillAdd:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #fff;
+}
+
+.filterInlineAdd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filterInlineAdd input {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  width: 140px;
+}
+
+.filterInlineAdd button {
+  background: var(--primary);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
+.filterInlineAdd button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filterInlineAdd button.cancel {
+  background: transparent;
+  color: var(--muted);
+}
+.filterInlineAdd button.cancel:hover {
+  background: #f1f5f9;
 }
 
 .badge {
@@ -1532,6 +1818,41 @@ pre {
   padding: 2px 6px;
 }
 
+.queueCommentBubble {
+  background: #fef08a !important;
+  color: #a16207 !important;
+  border-radius: 12px;
+  padding: 2px 6px;
+  display: flex;
+  align-items: center;
+}
+
+.queueAcceptBubble {
+  background: #bbf7d0 !important;
+  color: #166534 !important;
+  border-radius: 12px;
+  padding: 2px 6px;
+  display: flex;
+  align-items: center;
+}
+
+.floatingCommentBubble {
+  position: absolute;
+  top: 64px;
+  right: 16px;
+  max-width: 300px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+
 .candidateProjectSelect {
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -1650,4 +1971,310 @@ pre {
     min-height: 70vh;
   }
 }
+
+/* TATA CV Styles */
+.tataContainer {
+  background: #ffffff;
+  color: #000000;
+  font-family: 'Calibri', 'Arial', sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 30px 40px;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  min-height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.tataHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #000000;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.tataHeaderLeft strong {
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}
+
+.tataHeaderRight {
+  border: 1.5px solid #000000;
+  padding: 3px 12px;
+  border-radius: 4px;
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.tataTitle {
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 20px;
+  text-decoration: underline;
+}
+
+.tataTable {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000000;
+  margin-bottom: 20px;
+}
+
+.tataTable th, .tataTable td {
+  border: 1px solid #000000;
+  padding: 8px 12px;
+  vertical-align: top;
+}
+
+.tataLabelCol {
+  width: 30%;
+  font-weight: bold;
+  background-color: #ffffff;
+}
+
+.tataValueCol {
+  width: 70%;
+  background-color: #ffffff;
+}
+
+.tataValueCol.padding0 {
+  padding: 0 !important;
+}
+
+.tataValueCol input[type="text"],
+.tataValueCol textarea,
+.tataValueCol select {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #000000;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 4px;
+  margin: 0;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.tataValueCol input[type="text"]:focus,
+.tataValueCol textarea:focus,
+.tataValueCol select:focus {
+  border-color: var(--primary);
+  background: #f8fafc;
+}
+
+.tataValueCol input[type="text"]:hover,
+.tataValueCol textarea:hover,
+.tataValueCol select:hover {
+  background: rgba(0,0,0,0.02);
+}
+
+.tataInnerTable {
+  width: 100%;
+  border-collapse: collapse;
+  border: none;
+  margin: 0;
+}
+
+.tataInnerTable th, .tataInnerTable td {
+  border: none;
+  border-bottom: 1px solid #000000;
+  border-right: 1px solid #000000;
+  padding: 6px 10px;
+}
+
+.tataInnerTable th:last-child, .tataInnerTable td:last-child {
+  border-right: none;
+}
+
+.tataInnerTable tr:last-child td {
+  border-bottom: none;
+}
+
+.tataInnerTable th {
+  font-weight: bold;
+  text-align: left;
+  background: #f3f4f6;
+}
+
+.tataEmploymentBlock {
+  border-bottom: 1.5px solid #000000;
+  padding: 12px;
+}
+
+.tataEmploymentBlock:last-child {
+  border-bottom: none;
+}
+
+.tataEmploymentHeader {
+  margin-bottom: 12px;
+  background: #f9fafb;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px dashed #d1d5db;
+}
+
+.tataEmploymentHeader label {
+  font-weight: bold;
+  font-size: 11px;
+  display: block;
+  color: #4b5563;
+}
+
+.tataProjectsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.tataProjectBlock {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.tataProjectHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f3f4f6;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tataProjectInnerTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+}
+
+.tataProjectInnerTable td {
+  padding: 6px 12px !important;
+  border: none !important;
+  border-bottom: 1px solid #f3f4f6 !important;
+}
+
+.tataProjectInnerTable tr:last-child td {
+  border-bottom: none !important;
+}
+
+.tataAddBtn, .tataRowActionBtn {
+  font-size: 11px;
+  font-weight: bold;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: all 0.15s;
+}
+
+.tataAddBtn:hover {
+  background: #f3f4f6;
+}
+
+.tataRowActionBtn.danger {
+  color: #ef4444;
+  border-color: #fecaca;
+}
+
+.tataRowActionBtn.danger:hover {
+  background: #fef2f2;
+}
+
+/* Tab Active Styles for toolbar */
+.documentToolbar button.activeTab {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  border-color: var(--primary) !important;
+  font-weight: 700;
+}
+
+/* Print CSS Styles */
+@media print {
+  /* Hide all layout structures */
+  .sidebar, .topbar, .reviewBottomBar, .cvTopBar, .noPrint, .adminNotificationsPanel, .adminStatsGrid, .disciplineFilters, .projectDropdownWrapper, .tagEditorWrapper {
+    display: none !important;
+  }
+
+  /* Make sure workspace and preview container span 100% */
+  body, .shell, .workspace, .panel, .cvViewerFull {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  /* The actual TATA CV container */
+  .tataContainer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+
+  .tataValueCol input[type="text"],
+  .tataValueCol textarea,
+  .tataValueCol select {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    resize: none !important;
+    appearance: none !important;
+    -moz-appearance: none !important;
+    -webkit-appearance: none !important;
+  }
+  
+  /* Remove dashed borders and grey blocks */
+  .tataEmploymentHeader {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin-bottom: 8px !important;
+  }
+  
+  .tataEmploymentHeader label {
+    display: inline !important;
+    margin-right: 5px;
+  }
+
+  .tataProjectBlock {
+    border: none !important;
+    background: transparent !important;
+  }
+
+  .tataProjectHeader {
+    display: none !important;
+  }
+
+  .tataProjectInnerTable td {
+    border-bottom: none !important;
+  }
+}
+
 
