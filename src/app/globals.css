@@ -1135,17 +1135,6 @@ pre {
   background: #f1f5f9;
 }
 
-.badge {
-  border-radius: 4px;
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 3px 8px;
-  text-transform: uppercase;
-  width: fit-content;
-  line-height: 1;
-  letter-spacing: 0.03em;
-}
 
 .badge.electrical {
   background: #eff6ff;
