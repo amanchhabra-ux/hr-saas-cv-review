@@ -126,6 +126,222 @@ function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+const IGNORED_NAME_WORDS = new Set([
+  "curriculum vitae", "curriculum", "vitae", "cv", "resume", "bio data", "biodata",
+  "profile", "summary", "contact", "personal details", "personal information", "details",
+  "info", "information", "about me", "experience", "education", "skills", "page",
+  "candidate", "applicant", "phone", "email", "mobile", "address", "linkedin",
+  "github", "objective", "career objective", "professional summary", "declaration",
+  "engineer", "engineering", "manager", "management", "director", "officer", "lead",
+  "head", "consultant", "specialist", "supervisor", "controller", "coordinator",
+  "executive", "technician", "inspector", "surveyor", "planner", "scheduler",
+  "analyst", "developer", "designer", "architect", "auditor", "electrical", "civil",
+  "mechanical", "electronics", "instrumentation", "structural", "telecom", "scada",
+  "substation", "transmission", "distribution", "power", "energy", "solar", "wind",
+  "hydro", "safety", "hse", "qa/qc", "quality", "mis", "limited", "ltd", "pvt",
+  "private", "inc", "corp", "corporation", "company", "enterprises", "consulting",
+  "solutions", "services", "industries", "group", "resident engineer", "top skills",
+  "responsibility", "responsibilities", "manners", "strength", "languages", "work experience"
+]);
+
+export function toTitleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+export function cleanCandidateName(name: string): string {
+  if (!name) return "";
+  let cleaned = name
+    .replace(/^(?:(?:1\.\s*)?name|full\s*name|candidate(?:\x27s)?\s*name|staff\s*name|profile\s*name)\s*[:\-]\s*/i, "")
+    .replace(/^(?:mr\.|mr|mrs\.|mrs|ms\.|ms|dr\.|dr|shri|smt\.)\s+/i, "")
+    .replace(/[^\w\s.\x27-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (cleaned.length > 0 && (cleaned === cleaned.toUpperCase() || cleaned === cleaned.toLowerCase())) {
+    cleaned = toTitleCase(cleaned);
+  }
+  return cleaned;
+}
+
+export function isDisallowedName(line: string): boolean {
+  const lower = line.toLowerCase().trim();
+  if (IGNORED_NAME_WORDS.has(lower)) return true;
+  for (const phrase of IGNORED_NAME_WORDS) {
+    if (lower === phrase || lower.startsWith(phrase + " ") || lower.endsWith(" " + phrase)) {
+      return true;
+    }
+  }
+  const words = lower.split(/[^a-z]+/);
+  if (words.length > 0 && words.every((w) => !w || IGNORED_NAME_WORDS.has(w))) {
+    return true;
+  }
+  return false;
+}
+
+export function extractCandidateName(fileName: string, text: string): string {
+  if (!text && !fileName) return "";
+
+  if (text) {
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    // 1. Scan top 15 lines first for prominent candidate name (standard in 90% of CVs)
+    for (const rawLine of lines.slice(0, 15)) {
+      if (rawLine.includes("@") || rawLine.includes("http") || rawLine.includes("www")) continue;
+      if (/\d{3,}/.test(rawLine)) continue;
+      if (rawLine.length < 3 || rawLine.length > 40) continue;
+      if (isDisallowedName(rawLine)) continue;
+
+      const lineClean = rawLine.replace(/^(?:(?:1\.\s*)?name(?:\s+of\s+staff)?|full\s+name|candidate\s+name|profile\s+name)\s*[:\-]\s*/i, "");
+      const cleaned = cleanCandidateName(lineClean);
+      if (!cleaned) continue;
+
+      const words = cleaned.split(/\s+/);
+      if (words.length >= 2 && words.length <= 4) {
+        if (/^[a-zA-Z.\x27\s-]+$/.test(cleaned) && !isDisallowedName(cleaned)) {
+          return cleaned;
+        }
+      }
+    }
+
+    // 2. Explicit patterns (strictly excluding parent/company names)
+    const explicitPatterns = [
+      /(?:^|\n)\s*(?!(?:father|mother|husband|spouse|wife|parent|guardian|company|firm|client|project|college|university)\b)(?:(?:1\.\s*)?name\s+of\s+(?:the\s+)?(?:candidate|staff|applicant)|candidate(?:\s+\x27?s)?\s+name|full\s+name|profile\s+name)\s*[:\-]\s*([A-Za-z][A-Za-z .\x27-]{1,40})(?:\r?\n|$)/i,
+      /(?:^|\n)\s*(?:(?:1\.\s*)?name(?:\s+of\s+staff)?)\s*[:\-]\s*([A-Za-z][A-Za-z .\x27-]{1,40})(?:\r?\n|$)/i,
+    ];
+
+    for (const pat of explicitPatterns) {
+      const match = text.match(pat);
+      if (match && match[1]) {
+        const candidate = cleanCandidateName(match[1]);
+        if (candidate.length >= 3 && !isDisallowedName(candidate)) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  // 3. Fallback: intelligent name extraction from fileName
+  if (fileName) {
+    let base = fileName
+      .replace(/\.[^.]+$/, "")
+      .replace(/\b(?:curriculum\s*vitae|cv|resume|biodata|bio\s*data|profile|updated|latest|final|draft|copy|v\d+)\b/gi, " ")
+      .replace(/\b(?:electrical|civil|mechanical|hse|safety|engineer|manager|lead|exp|\d{4,}|\d+\s*(?:years?|yrs?))\b/gi, " ")
+      .replace(/[_-]+/g, " ")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/[^\w\s.\x27-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const cleaned = cleanCandidateName(base);
+    if (cleaned.length >= 3 && !isDisallowedName(cleaned)) {
+      return cleaned;
+    }
+    if (base.length >= 3) return base;
+  }
+
+  return fileName ? fileName.replace(/\.[^.]+$/, "") : "Candidate";
+}
+
+export const RECRUITER_WHATSAPP_NUMBER = "+91-8527305947";
+export const RECRUITER_WHATSAPP_CLEAN = "918527305947";
+
+export function cleanToStandardPhone(raw: string): string {
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  // If ends in 10 digits starting with 6,7,8,9 (Indian mobile)
+  if (digits.length === 10 && /^[6-9]/.test(digits)) {
+    return `+91${digits}`;
+  }
+  // 11 digits starting with 0 followed by 6,7,8,9
+  if (digits.length === 11 && digits.startsWith("0") && /^[6-9]/.test(digits.slice(1))) {
+    return `+91${digits.slice(1)}`;
+  }
+  // 12 digits starting with 91 followed by 6,7,8,9
+  if (digits.length === 12 && digits.startsWith("91") && /^[6-9]/.test(digits.slice(2))) {
+    return `+${digits}`;
+  }
+  // Standard international phone (10-15 digits)
+  if (digits.length >= 10 && digits.length <= 15) {
+    return `+${digits}`;
+  }
+  return "";
+}
+
+export function formatPhoneDisplay(phone: string): string {
+  if (!phone) return "";
+  const clean = phone.replace(/[^\d+]/g, "");
+  if (clean.startsWith("+91") && clean.length === 13) {
+    return `+91 ${clean.slice(3, 8)} ${clean.slice(8)}`;
+  }
+  return phone;
+}
+
+export function sanitizePhoneForWhatsApp(phone: string): string {
+  if (!phone) return "";
+  let digits = phone.replace(/\D/g, "");
+  if (digits.length === 10 && /^[6-9]/.test(digits)) {
+    digits = `91${digits}`;
+  } else if (digits.length === 11 && digits.startsWith("0")) {
+    digits = `91${digits.slice(1)}`;
+  }
+  return digits;
+}
+
+export function extractCandidatePhone(rawText: string): string {
+  if (!rawText) return "";
+  const text = rawText
+    .replace(/[\u2013\u2014\u2212]/g, "-")
+    .replace(/[\u00A0\u200B]/g, " ");
+
+  const lines = text.split(/\r?\n/).slice(0, 60);
+
+  // 1. Scan for lines with explicit contact keywords
+  const keywordRegex = /(?:mobile|mob|phone|ph\.?|contact|tel|whatsapp|cell|telephone|call|☎|📞|ph\s*no)\s*(?:no\.?|num|number|details?)?\s*[:\-\.]?\s*([+]?[\d\s\-().,/&]{7,50})/i;
+  
+  for (const line of lines) {
+    const match = line.match(keywordRegex);
+    if (match) {
+      const phoneSegment = match[1];
+      const potential = phoneSegment.match(/(?:\+?91[\s\-]?)?(?:\(?\d{2,5}\)?[\s\-]?)?\d{5,10}/g);
+      if (potential) {
+        for (const p of potential) {
+          const res = cleanToStandardPhone(p);
+          if (res) return res;
+        }
+      }
+    }
+  }
+
+  // 2. Scan top 40 lines for explicit +91 or standard 10-digit mobile
+  for (const line of lines) {
+    if (/pin\s*code|pin\s*[-:]?\s*\d{6}/i.test(line) && !line.includes("+91")) continue;
+    if (/aadhaar|adhaar|\buid\b/i.test(line)) continue;
+
+    // Pattern with +91
+    const p1 = line.match(/(?:\+91[\s\-]?)?[6-9]\d{4}[\s\-]?\d{5}\b/);
+    if (p1) {
+      const res = cleanToStandardPhone(p1[0]);
+      if (res) return res;
+    }
+
+    // Isolated 10 digit number
+    const p2 = line.match(/\b[6-9]\d{9}\b/);
+    if (p2) {
+      const res = cleanToStandardPhone(p2[0]);
+      if (res) return res;
+    }
+  }
+
+  return "";
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main parser
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,29 +364,7 @@ export function parseTataCv(rawText: string, defaultName = ""): TataCvData {
   const lower = text.toLowerCase();
 
   // ── 1. Name ───────────────────────────────────────────────────────────────
-  let nameOfStaff = "";
-
-  // a) Explicit "Name:" field  (common in PDFs)
-  //    Stop at newline so we don't bleed into "Father's Name" etc.
-  const nameFieldM = text.match(
-    /(?:^|\n)\s*(?:^name|full\s+name|candidate(?:'s)?\s+name)\s*:\s*([A-Za-z][A-Za-z .]{2,45}?)(?:\s*\n|$)/im
-  );
-  if (nameFieldM) nameOfStaff = nameFieldM[1].trim();
-
-  // b) First ALL-CAPS line in first 8 lines (ignores "TOP SKILLS", "CONTACT" etc.)
-  if (!nameOfStaff) {
-    const skipWords = /^(contact|top\s+skills|skills|summary|experience|education|objective|profile|languages|page\s+\d)/i;
-    for (const l of lines.slice(0, 8)) {
-      if (/^[A-Z][A-Z\s.]{3,44}$/.test(l) && !skipWords.test(l)) {
-        nameOfStaff = l; break;
-      }
-    }
-  }
-
-  // c) Fall back to defaultName (strip file extension)
-  if (!nameOfStaff && defaultName) {
-    nameOfStaff = defaultName.replace(/\.(pdf|docx?|rtf|txt|odt)$/i, "").trim();
-  }
+  const nameOfStaff = extractCandidateName(defaultName, text);
 
   // ── 2. Proposed Position ──────────────────────────────────────────────────
   let proposedPosition = "";
@@ -642,5 +836,133 @@ function emptyTataData(name: string): TataCvData {
         ],
       },
     ],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Qualification Extraction & Tagging
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type QualificationBroadType =
+  | "Post Graduate"
+  | "Degree"
+  | "Diploma"
+  | "ITI"
+  | "High School"
+  | "Other";
+
+export interface CandidateQualificationInfo {
+  qualification: string;
+  qualificationType: QualificationBroadType;
+  qualifications: string[];
+  qualificationRank: number;
+  qualificationDetail: string;
+}
+
+export function extractCandidateQualification(
+  rawText = "",
+  eduField = "",
+  fileName = ""
+): CandidateQualificationInfo {
+  const combined = `${eduField || ""}\n${rawText || ""}\n${fileName || ""}`.replace(/[\u2013\u2014]/g, "-");
+
+  // 1. Ph.D / Doctorate
+  const hasPhd = /\b(?:ph\.?d|doctorate|doctor\s+of\s+philosophy)\b/i.test(combined);
+
+  // 2. Master / M.Tech / M.E. / M.Sc
+  const hasMTech =
+    /\b(?:m\.?tech|master\s+of\s+technology|master\s+of\s+engineering|m\.tech\.?)\b/i.test(combined) ||
+    /\b(?:m\.e\.|m\.e\b\s*[-–:(]|m\.e\s+in\b|degree\s+of\s+m\.e\b)/i.test(combined) ||
+    /\b(?:m\.s\.|master\s+of\s+science|m\.sc\b|m\.sc\.)/i.test(combined);
+
+  // 3. MBA / PGDM / PG
+  const hasMba = /\b(?:mba\b|pgdm\b|post\s*graduate\s*diploma|master\s+of\s+business\s+administration)\b/i.test(combined);
+
+  // 4. B.Tech / B.E. (Bachelor of Technology / Engineering)
+  const hasBTech =
+    /\b(?:b\.?tech|bachelor\s+of\s+technology|bachelor\s+of\s+engineering)\b/i.test(combined) ||
+    /\b(?:b\.e\.|b\.e\b\s*[-–:(]|b\.e\s+in\b|b\.e\s+(?:civil|electrical|mech|electronics)|degree\s+of\s+b\.e\b)\b/i.test(combined) ||
+    /\b(?:b-tech|b\s+tech|b\.\s*tech)\b/i.test(combined);
+
+  // 5. Other Bachelor / Graduate (B.Sc, BCA, B.Com, B.A., Bachelor of Science)
+  const hasOtherDegree =
+    /\b(?:b\.?sc\b|b\.?sc\.|bachelor\s+of\s+science|bca\b|b\.?com\b|bachelor\s+of\s+commerce|b\.?a\b\s*\(|bachelor\s+of\s+arts|graduation\b|graduate\b)\b/i.test(combined);
+
+  // 6. Diploma / Polytechnic (excluding standalone Post Graduate Diploma which belongs to PG)
+  const hasDiploma =
+    /\b(?:(?<!post\s+graduate\s+|pg\s+)diploma|polytechnic|board\s+of\s+technical\s+education|state\s+board\s+of\s+technical|d\.e\.e\b|dce\b|dme\b)\b/i.test(combined);
+
+  // 7. ITI / Trade Certificate / NCVT / SCVT
+  const hasIti = /\b(?:iti\b|i\.t\.i\b|ncvt\b|scvt\b|industrial\s+training\s+institute)\b/i.test(combined);
+
+  // 8. 10+2 / Intermediate / Higher Secondary
+  const hasInter = /\b(?:10\+2|intermediate|senior\s+secondary|hsc\b|12th\b)/i.test(combined);
+
+  const qualifications: string[] = [];
+  if (hasPhd) qualifications.push("Ph.D");
+  if (hasMTech) qualifications.push("M.Tech / M.E.");
+  if (hasMba) qualifications.push("MBA / PG");
+  if (hasBTech) qualifications.push("B.Tech / B.E.");
+  else if (hasOtherDegree) qualifications.push("Degree (B.Sc/Other)");
+  if (hasDiploma) qualifications.push("Diploma");
+  if (hasIti) qualifications.push("ITI");
+  if (qualifications.length === 0 && hasInter) qualifications.push("10+2 / Intermediate");
+
+  let qualification = "Other";
+  let qualificationType: QualificationBroadType = "Other";
+  let qualificationRank = 0;
+
+  if (hasPhd) {
+    qualification = "Ph.D";
+    qualificationType = "Post Graduate";
+    qualificationRank = 6;
+  } else if (hasMTech) {
+    qualification = "M.Tech / M.E.";
+    qualificationType = "Post Graduate";
+    qualificationRank = 5;
+  } else if (hasMba) {
+    qualification = "MBA / PG";
+    qualificationType = "Post Graduate";
+    qualificationRank = 5;
+  } else if (hasBTech) {
+    qualification = "B.Tech / B.E.";
+    qualificationType = "Degree";
+    qualificationRank = 4;
+  } else if (hasOtherDegree) {
+    qualification = "Degree (B.Sc/Other)";
+    qualificationType = "Degree";
+    qualificationRank = 4;
+  } else if (hasDiploma) {
+    qualification = "Diploma";
+    qualificationType = "Diploma";
+    qualificationRank = 3;
+  } else if (hasIti) {
+    qualification = "ITI";
+    qualificationType = "ITI";
+    qualificationRank = 2;
+  } else if (hasInter) {
+    qualification = "10+2 / Intermediate";
+    qualificationType = "High School";
+    qualificationRank = 1;
+  }
+
+  // Extract a specific detail line if available in education section or CV text
+  let qualificationDetail = "";
+  const lines = `${eduField || ""}\n${rawText || ""}`.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    if (/\b(?:b\.?tech|bachelor|m\.?tech|master|diploma|polytechnic|iti|b\.?e\b|mba|b\.?sc)\b/i.test(line)) {
+      if (line.length > 5 && line.length < 130 && !/^(?:education|academic|qualification|examination)s?:?$/i.test(line)) {
+        qualificationDetail = line.replace(/^[-•*]\s*/, "");
+        break;
+      }
+    }
+  }
+
+  return {
+    qualification,
+    qualificationType,
+    qualifications,
+    qualificationRank,
+    qualificationDetail,
   };
 }

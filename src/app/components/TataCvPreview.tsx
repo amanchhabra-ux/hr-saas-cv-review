@@ -5,9 +5,10 @@ import { TataCvData, parseTataCv } from "../../lib/cvParser";
 interface TataCvPreviewProps {
   candidate: Candidate;
   updateSelected: (changes: Partial<Candidate>) => void;
+  searchQuery?: string;
 }
 
-export default function TataCvPreview({ candidate, updateSelected }: TataCvPreviewProps) {
+export default function TataCvPreview({ candidate, updateSelected, searchQuery }: TataCvPreviewProps) {
   // Ensure we have fallback data
   const data: TataCvData = candidate.tataData || {
     proposedPosition: "",

@@ -1,10 +1,29 @@
 import { unstable_noStore as noStore } from 'next/cache';
 import { promises as fs } from "fs";
 import path from "path";
-import { TataCvData, parseTataCv } from "./cvParser";
+import {
+  TataCvData,
+  parseTataCv,
+  extractCandidateName,
+  extractCandidatePhone,
+  extractCandidateQualification,
+  QualificationBroadType,
+} from "./cvParser";
 
 const DATA_DIR = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "data");
 const DB_FILE = path.join(DATA_DIR, "db.json");
+const USE_BLOB = Boolean(process.env.VERCEL && process.env.BLOB_READ_WRITE_TOKEN);
+
+export interface CandidateMessage {
+  id: string;
+  type: "whatsapp" | "email" | "note";
+  direction: "outbound" | "inbound";
+  sender: string;
+  recipient: string;
+  subject?: string;
+  text: string;
+  timestamp: string;
+}
 
 export interface DbCandidate {
   id: string;
@@ -12,6 +31,8 @@ export interface DbCandidate {
   uploadedAt: string;
   displayName: string;
   email: string;
+  phone?: string;
+  messages?: CandidateMessage[];
   fileType: string;
   objectUrl: string;
   previewUrl: string;
@@ -31,6 +52,11 @@ export interface DbCandidate {
   previewMimeType?: string;
   uploaderEmail?: string;
   tataData?: TataCvData;
+  qualification?: string;
+  qualificationType?: QualificationBroadType | string;
+  qualifications?: string[];
+  qualificationRank?: number;
+  qualificationDetail?: string;
 }
 
 interface DbData {
@@ -45,6 +71,8 @@ let cachedBlobUrl: string | null = null;
 async function ensureDb() {
   try {
     await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.mkdir(path.join(DATA_DIR, 'files'), { recursive: true });
+    await fs.mkdir(path.join(DATA_DIR, 'previews'), { recursive: true });
     try {
       await fs.access(DB_FILE);
     } catch {
@@ -56,13 +84,13 @@ async function ensureDb() {
 }
 
 export async function readDb(): Promise<DbData> {
-  noStore(); // Completely disable Next.js aggressive fetch data caching for this entire execution path
+  noStore();
   await ensureDb();
   
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  if (USE_BLOB) {
     try {
       const { get } = await import('@vercel/blob');
-      const res = await get('db.json', { access: 'private', token: process.env.BLOB_READ_WRITE_TOKEN });
+      const res = await get('db.json', { access: 'public', token: process.env.BLOB_READ_WRITE_TOKEN });
       if (res && res.stream) {
         const chunks = [];
         for await (const chunk of res.stream as any) {
@@ -73,7 +101,7 @@ export async function readDb(): Promise<DbData> {
         return migrateDb(parsed);
       }
     } catch (e) {
-      console.error("Failed to read from Vercel Blob:", e);
+      console.warn("Could not read from Vercel Blob, falling back to local file:", e);
     }
   }
   
@@ -114,16 +142,50 @@ function migrateDb(parsed: DbData): DbData {
     delete parsed.users;
   }
 
-  // Ensure all candidates have a project property and tataData is populated
+  // Ensure all candidates have clean names, valid project property, and tataData populated
   parsed.candidates.forEach((c) => {
     if (c.project === undefined) {
       c.project = "";
+    }
+    const currentName = c.displayName?.trim() || "";
+    const needsFix =
+      !currentName ||
+      currentName.toLowerCase() === "objective" ||
+      currentName.toLowerCase().startsWith("name-") ||
+      currentName.toLowerCase().startsWith("name:") ||
+      currentName === c.fileName;
+    if (needsFix) {
+      const fixedName = extractCandidateName(c.fileName, c.rawText);
+      if (fixedName) {
+        c.displayName = fixedName;
+        if (c.tataData) {
+          c.tataData.nameOfStaff = fixedName;
+        }
+      }
+    }
+    if (!c.phone && c.rawText) {
+      c.phone = extractCandidatePhone(c.rawText);
+    }
+    if (!c.messages) {
+      c.messages = [];
     }
     if (!c.tataData && c.rawText) {
       try {
         c.tataData = parseTataCv(c.rawText, c.displayName);
       } catch (e) {
         console.error(`parseTataCv failed for candidate ${c.id}:`, e);
+      }
+    }
+    if (!c.qualification) {
+      try {
+        const qInfo = extractCandidateQualification(c.rawText, c.tataData?.education, c.fileName);
+        c.qualification = qInfo.qualification;
+        c.qualificationType = qInfo.qualificationType;
+        c.qualifications = qInfo.qualifications;
+        c.qualificationRank = qInfo.qualificationRank;
+        c.qualificationDetail = qInfo.qualificationDetail;
+      } catch (e) {
+        console.error(`extractCandidateQualification failed for candidate ${c.id}:`, e);
       }
     }
   });
@@ -146,23 +208,24 @@ export async function writeDb(data: DbData): Promise<void> {
   
   const jsonContent = JSON.stringify(payload, null, 2);
   
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  // Always write to local file
+  await fs.writeFile(DB_FILE, jsonContent, "utf8");
+
+  // If on Vercel with Blob, sync in background
+  if (USE_BLOB) {
     try {
       const { put } = await import('@vercel/blob');
       const res = await put('db.json', jsonContent, {
-        access: 'private',
+        access: 'public',
         addRandomSuffix: false,
         allowOverwrite: true,
         contentType: 'application/json',
       });
       cachedBlobUrl = res.url;
-      return;
     } catch (e) {
-      console.error("Failed to write to Vercel Blob:", e);
+      console.warn("Failed to write to Vercel Blob:", e);
     }
   }
-  
-  await fs.writeFile(DB_FILE, jsonContent, "utf8");
 }
 
 export async function getCandidates(userEmail: string): Promise<DbCandidate[]> {
@@ -220,36 +283,52 @@ export async function addCandidates(userEmail: string, newCandidates: DbCandidat
     delete newCand.previewBase64;
     
     if (fileBase64) {
-      const fileBuffer = Buffer.from(fileBase64, 'base64');
-      if (process.env.BLOB_READ_WRITE_TOKEN) {
-        const { put } = await import('@vercel/blob');
-        await put(`candidates/${candidate.id}/file`, fileBuffer, {
-          access: 'private',
-          addRandomSuffix: false,
-          allowOverwrite: true,
-          contentType: fileMimeType || 'application/octet-stream',
-        });
-      } else {
+      try {
+        const fileBuffer = Buffer.from(fileBase64, 'base64');
         const fileDir = path.join(DATA_DIR, 'files');
         await fs.mkdir(fileDir, { recursive: true });
         await fs.writeFile(path.join(fileDir, candidate.id), fileBuffer);
+
+        if (USE_BLOB) {
+          try {
+            const { put } = await import('@vercel/blob');
+            await put(`candidates/${candidate.id}/file`, fileBuffer, {
+              access: 'public',
+              addRandomSuffix: false,
+              allowOverwrite: true,
+              contentType: fileMimeType || 'application/octet-stream',
+            });
+          } catch (blobErr) {
+            console.warn("Vercel Blob file put warning:", blobErr);
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to save file for ${candidate.id}:`, err);
       }
     }
     
     if (previewBase64) {
-      const previewBuffer = Buffer.from(previewBase64, 'base64');
-      if (process.env.BLOB_READ_WRITE_TOKEN) {
-        const { put } = await import('@vercel/blob');
-        await put(`candidates/${candidate.id}/preview`, previewBuffer, {
-          access: 'private',
-          addRandomSuffix: false,
-          allowOverwrite: true,
-          contentType: previewMimeType || 'text/html',
-        });
-      } else {
+      try {
+        const previewBuffer = Buffer.from(previewBase64, 'base64');
         const previewDir = path.join(DATA_DIR, 'previews');
         await fs.mkdir(previewDir, { recursive: true });
         await fs.writeFile(path.join(previewDir, candidate.id), previewBuffer);
+
+        if (USE_BLOB) {
+          try {
+            const { put } = await import('@vercel/blob');
+            await put(`candidates/${candidate.id}/preview`, previewBuffer, {
+              access: 'public',
+              addRandomSuffix: false,
+              allowOverwrite: true,
+              contentType: previewMimeType || 'text/html',
+            });
+          } catch (blobErr) {
+            console.warn("Vercel Blob preview put warning:", blobErr);
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to save preview for ${candidate.id}:`, err);
       }
     }
     
@@ -285,7 +364,14 @@ export async function deleteCandidate(candidateId: string): Promise<boolean> {
   db.candidates.splice(index, 1);
   await writeDb(db);
   
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  // Local deletion
+  try {
+    await fs.unlink(path.join(DATA_DIR, 'files', candidateId)).catch(() => {});
+    await fs.unlink(path.join(DATA_DIR, 'previews', candidateId)).catch(() => {});
+  } catch {}
+
+  // Blob deletion if on Vercel
+  if (USE_BLOB) {
     try {
       const { list, del } = await import('@vercel/blob');
       const fileBlobs = await list({ prefix: `candidates/${candidateId}/` });
@@ -294,13 +380,8 @@ export async function deleteCandidate(candidateId: string): Promise<boolean> {
         await del(urls);
       }
     } catch (e) {
-      console.error("Failed to delete Vercel Blobs:", e);
+      console.warn("Failed to delete Vercel Blobs:", e);
     }
-  } else {
-    try {
-      await fs.unlink(path.join(DATA_DIR, 'files', candidateId)).catch(() => {});
-      await fs.unlink(path.join(DATA_DIR, 'previews', candidateId)).catch(() => {});
-    } catch {}
   }
   
   return true;
@@ -313,13 +394,19 @@ export async function deleteAllCandidates(): Promise<boolean> {
   db.candidates = [];
   await writeDb(db);
   
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  try {
+    await fs.rm(path.join(DATA_DIR, 'files'), { recursive: true, force: true }).catch(() => {});
+    await fs.rm(path.join(DATA_DIR, 'previews'), { recursive: true, force: true }).catch(() => {});
+    await fs.mkdir(path.join(DATA_DIR, 'files'), { recursive: true });
+    await fs.mkdir(path.join(DATA_DIR, 'previews'), { recursive: true });
+  } catch {}
+
+  if (USE_BLOB) {
     try {
       const { list, del } = await import('@vercel/blob');
       const fileBlobs = await list({ prefix: `candidates/` });
       const urls = fileBlobs.blobs.map(b => b.url);
       
-      // Vercel blob del() supports up to 1000 blobs at a time, but we'll delete in chunks of 500 just in case
       const chunkSize = 500;
       for (let i = 0; i < urls.length; i += chunkSize) {
         const chunk = urls.slice(i, i + chunkSize);
@@ -328,94 +415,100 @@ export async function deleteAllCandidates(): Promise<boolean> {
         }
       }
     } catch (e) {
-      console.error("Failed to bulk delete Vercel Blobs:", e);
+      console.warn("Failed to bulk delete Vercel Blobs:", e);
     }
-  } else {
-    try {
-      await fs.rm(path.join(DATA_DIR, 'files'), { recursive: true, force: true }).catch(() => {});
-      await fs.rm(path.join(DATA_DIR, 'previews'), { recursive: true, force: true }).catch(() => {});
-    } catch {}
   }
   
   return true;
 }
 
 export async function getCandidateFile(candidateId: string): Promise<{ data: Buffer; mimeType: string } | null> {
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    try {
-      const { list, get } = await import('@vercel/blob');
-      const prefix = `candidates/${candidateId}/file`;
-      const { blobs } = await list({ prefix });
-      if (blobs[0]) {
-        const res = await get(blobs[0].url, { access: 'private', token: process.env.BLOB_READ_WRITE_TOKEN });
-        if (res && res.stream) {
-          const chunks = [];
-          for await (const chunk of res.stream as any) {
-            chunks.push(chunk as Uint8Array);
-          }
-          const db = await readDb();
-          const candidate = db.candidates.find(c => c.id === candidateId);
-          return {
-            data: Buffer.concat(chunks),
-            mimeType: candidate?.fileMimeType || 'application/octet-stream',
-          };
-        }
-      }
-    } catch (e) {
-      console.error("Failed to read candidate file from Vercel Blob:", e);
-    }
-  }
-  
+  // 1. Try local filesystem
   try {
-    const db = await readDb();
-    const candidate = db.candidates.find(c => c.id === candidateId);
     const filePath = path.join(DATA_DIR, 'files', candidateId);
     const data = await fs.readFile(filePath);
+    const db = await readDb();
+    const candidate = db.candidates.find(c => c.id === candidateId);
     return {
       data,
       mimeType: candidate?.fileMimeType || 'application/octet-stream',
     };
-  } catch {
+  } catch (localErr) {
+    // 2. Try Vercel Blob if on Vercel
+    if (USE_BLOB) {
+      try {
+        const { list, get } = await import('@vercel/blob');
+        const prefix = `candidates/${candidateId}/file`;
+        const { blobs } = await list({ prefix });
+        if (blobs[0]) {
+          const res = await get(blobs[0].url, { access: 'public', token: process.env.BLOB_READ_WRITE_TOKEN });
+          if (res && res.stream) {
+            const chunks = [];
+            for await (const chunk of res.stream as any) {
+              chunks.push(chunk as Uint8Array);
+            }
+            const db = await readDb();
+            const candidate = db.candidates.find(c => c.id === candidateId);
+            return {
+              data: Buffer.concat(chunks),
+              mimeType: candidate?.fileMimeType || 'application/octet-stream',
+            };
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read candidate file from Vercel Blob:", e);
+      }
+    }
     return null;
   }
 }
 
 export async function getCandidatePreview(candidateId: string): Promise<{ data: Buffer; mimeType: string } | null> {
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    try {
-      const { list, get } = await import('@vercel/blob');
-      const prefix = `candidates/${candidateId}/preview`;
-      const { blobs } = await list({ prefix });
-      if (blobs[0]) {
-        const res = await get(blobs[0].url, { access: 'private', token: process.env.BLOB_READ_WRITE_TOKEN });
-        if (res && res.stream) {
-          const chunks = [];
-          for await (const chunk of res.stream as any) {
-            chunks.push(chunk as Uint8Array);
-          }
-          const db = await readDb();
-          const candidate = db.candidates.find(c => c.id === candidateId);
-          return {
-            data: Buffer.concat(chunks),
-            mimeType: candidate?.previewMimeType || 'text/html',
-          };
-        }
-      }
-    } catch (e) {
-      console.error("Failed to read candidate preview from Vercel Blob:", e);
-    }
-  }
-  
+  // 1. Try local filesystem preview
   try {
-    const db = await readDb();
-    const candidate = db.candidates.find(c => c.id === candidateId);
     const filePath = path.join(DATA_DIR, 'previews', candidateId);
     const data = await fs.readFile(filePath);
+    const db = await readDb();
+    const candidate = db.candidates.find(c => c.id === candidateId);
     return {
       data,
       mimeType: candidate?.previewMimeType || 'text/html',
     };
-  } catch {
+  } catch (localErr) {
+    // 2. Try Vercel Blob preview if on Vercel
+    if (USE_BLOB) {
+      try {
+        const { list, get } = await import('@vercel/blob');
+        const prefix = `candidates/${candidateId}/preview`;
+        const { blobs } = await list({ prefix });
+        if (blobs[0]) {
+          const res = await get(blobs[0].url, { access: 'public', token: process.env.BLOB_READ_WRITE_TOKEN });
+          if (res && res.stream) {
+            const chunks = [];
+            for await (const chunk of res.stream as any) {
+              chunks.push(chunk as Uint8Array);
+            }
+            const db = await readDb();
+            const candidate = db.candidates.find(c => c.id === candidateId);
+            return {
+              data: Buffer.concat(chunks),
+              mimeType: candidate?.previewMimeType || 'text/html',
+            };
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read candidate preview from Vercel Blob:", e);
+      }
+    }
+
+    // 3. Fallback: if preview missing but file exists and is PDF, serve original file as preview
+    try {
+      const fileRes = await getCandidateFile(candidateId);
+      if (fileRes && (fileRes.mimeType.includes("pdf") || fileRes.mimeType.includes("text"))) {
+        return fileRes;
+      }
+    } catch {}
+
     return null;
   }
 }
