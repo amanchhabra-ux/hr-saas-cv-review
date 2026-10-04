@@ -431,6 +431,7 @@ export default function Home() {
   const [showIndustryEditor, setShowIndustryEditor] = useState(false);
 
   const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
+  const [isCurrentPreviewPdf, setIsCurrentPreviewPdf] = useState(false);
   const [isBlobLoading, setIsBlobLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{
@@ -481,18 +482,13 @@ export default function Home() {
     const base = localBlobUrl || selectedPreviewUrl;
     if (!base) return "";
     if (!query.trim()) return base;
-    const isPdf =
-      base.includes(".pdf") ||
-      (selectedFileName && selectedFileName.toLowerCase().endsWith(".pdf")) ||
-      selectedPreviewMime?.includes("application/pdf") ||
-      selectedFileMime?.includes("application/pdf");
 
-    if (isPdf) {
+    if (isCurrentPreviewPdf) {
       const sep = base.includes("#") ? "&" : "#";
       return `${base}${sep}search=${encodeURIComponent(query.trim())}`;
     }
     return base;
-  }, [localBlobUrl, selectedPreviewUrl, selectedFileName, selectedPreviewMime, selectedFileMime, query]);
+  }, [localBlobUrl, selectedPreviewUrl, isCurrentPreviewPdf, query]);
 
   function handleNavigateMatch(direction: "next" | "prev") {
     if (matchedKeywordsCount === 0) return;
@@ -581,12 +577,11 @@ export default function Home() {
 
     // Fast path: if previewBase64 is directly available in memory, generate blob URL instantly
     if (selectedPreviewBase64) {
-      const isPdf =
-        (selectedFileName && selectedFileName.toLowerCase().endsWith(".pdf")) ||
-        selectedPreviewMime?.includes("application/pdf");
-      const finalMime = isPdf ? "application/pdf" : selectedPreviewMime || "text/html;charset=utf-8";
       try {
         const bytes = Uint8Array.from(atob(selectedPreviewBase64), (char) => char.charCodeAt(0));
+        const isPdf = bytes.length >= 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+        setIsCurrentPreviewPdf(isPdf);
+        const finalMime = isPdf ? "application/pdf" : (selectedPreviewMime || "text/html;charset=utf-8");
         const blob = new Blob([bytes], { type: finalMime });
         const url = URL.createObjectURL(blob);
         setLocalBlobUrl(url);
@@ -605,19 +600,19 @@ export default function Home() {
       fetch(selectedPreviewUrl)
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to load preview`);
-          const contentType = res.headers.get("content-type");
+          const contentType = res.headers.get("content-type") || "";
           return res.arrayBuffer().then((buffer) => ({ buffer, contentType }));
         })
         .then(({ buffer, contentType }) => {
           if (active) {
+            const u8 = new Uint8Array(buffer);
             const isPdf =
-              selectedPreviewUrl.includes(".pdf") ||
-              (selectedFileName && selectedFileName.toLowerCase().endsWith(".pdf")) ||
-              contentType?.includes("application/pdf") ||
-              selectedPreviewMime?.includes("application/pdf");
+              contentType.includes("application/pdf") ||
+              (u8.length >= 4 && u8[0] === 0x25 && u8[1] === 0x50 && u8[2] === 0x44 && u8[3] === 0x46);
+            setIsCurrentPreviewPdf(isPdf);
             const finalMime = isPdf
               ? "application/pdf"
-              : contentType || selectedPreviewMime || "text/html;charset=utf-8";
+              : contentType.includes("html") ? "text/html;charset=utf-8" : (contentType || "text/html;charset=utf-8");
             const blob = new Blob([buffer], { type: finalMime });
             const url = URL.createObjectURL(blob);
             setLocalBlobUrl(url);
@@ -627,11 +622,13 @@ export default function Home() {
         .catch((err) => {
           console.warn("Failed to fetch local blob, falling back to direct URL:", err);
           if (active) {
+            setIsCurrentPreviewPdf(false);
             setLocalBlobUrl(selectedPreviewUrl);
             setIsBlobLoading(false);
           }
         });
     } else {
+      setIsCurrentPreviewPdf(false);
       setLocalBlobUrl(null);
     }
     return () => {
