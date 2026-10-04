@@ -5,7 +5,8 @@ dist
 coverage
 *.log
 .vercel
-data/
+data/files/
+data/previews/
 .env*
 .DS_Store
 *.tsbuildinfo

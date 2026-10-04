@@ -8,7 +8,15 @@ const bucketName = process.env.R2_BUCKET_NAME?.trim();
 let s3ClientInstance: S3Client | null = null;
 
 export function isR2Configured(): boolean {
-  return Boolean(accountId && accessKeyId && secretAccessKey && bucketName);
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) return false;
+  if (
+    accessKeyId.includes("[SENSITIVE]") ||
+    secretAccessKey.includes("[SENSITIVE]") ||
+    bucketName.includes("[SENSITIVE]")
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function getR2BucketName(): string {

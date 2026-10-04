@@ -11,8 +11,9 @@ import {
 } from "./cvParser";
 import { isR2Configured, getFromR2, uploadToR2 } from "./r2";
 
-const DATA_DIR = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "data");
-const DB_FILE = path.join(DATA_DIR, "db.json");
+const SEED_DB_FILE = path.join(process.cwd(), "data", "db.json");
+const RUNTIME_DATA_DIR = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "data");
+const RUNTIME_DB_FILE = path.join(RUNTIME_DATA_DIR, "db.json");
 const USE_BLOB = Boolean(process.env.VERCEL && process.env.BLOB_READ_WRITE_TOKEN);
 
 export interface CandidateMessage {
@@ -71,13 +72,18 @@ let cachedBlobUrl: string | null = null;
 
 async function ensureDb() {
   try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.mkdir(path.join(DATA_DIR, 'files'), { recursive: true });
-    await fs.mkdir(path.join(DATA_DIR, 'previews'), { recursive: true });
+    await fs.mkdir(RUNTIME_DATA_DIR, { recursive: true });
+    await fs.mkdir(path.join(RUNTIME_DATA_DIR, 'files'), { recursive: true });
+    await fs.mkdir(path.join(RUNTIME_DATA_DIR, 'previews'), { recursive: true });
     try {
-      await fs.access(DB_FILE);
+      await fs.access(RUNTIME_DB_FILE);
     } catch {
-      await fs.writeFile(DB_FILE, JSON.stringify({ candidates: [], projects: ["Reliance TL project"] }, null, 2), "utf8");
+      try {
+        await fs.access(SEED_DB_FILE);
+        await fs.copyFile(SEED_DB_FILE, RUNTIME_DB_FILE);
+      } catch {
+        await fs.writeFile(RUNTIME_DB_FILE, JSON.stringify({ candidates: [], projects: ["Reliance TL project"] }, null, 2), "utf8");
+      }
     }
   } catch (e) {
     console.error("Failed to initialize database:", e);
@@ -88,19 +94,41 @@ export async function readDb(): Promise<DbData> {
   noStore();
   await ensureDb();
   
+  // 1. Check Cloudflare R2 if configured
   if (isR2Configured()) {
     try {
       const r2Res = await getFromR2("db.json");
       if (r2Res) {
         const content = r2Res.data.toString("utf8");
         const parsed = JSON.parse(content) as DbData;
-        return migrateDb(parsed);
+        if (parsed.candidates && parsed.candidates.length > 0) {
+          return migrateDb(parsed);
+        }
       }
     } catch (e) {
       console.warn("Could not read from Cloudflare R2, falling back:", e);
     }
   }
 
+  // 2. Read runtime DB file (/tmp/db.json on Vercel, data/db.json locally)
+  try {
+    const content = await fs.readFile(RUNTIME_DB_FILE, "utf8");
+    const parsed = JSON.parse(content) as DbData;
+    if (parsed.candidates && parsed.candidates.length > 0) {
+      return migrateDb(parsed);
+    }
+  } catch {}
+
+  // 3. Fallback to bundled seed file (data/db.json)
+  try {
+    const content = await fs.readFile(SEED_DB_FILE, "utf8");
+    const parsed = JSON.parse(content) as DbData;
+    if (parsed.candidates && parsed.candidates.length > 0) {
+      return migrateDb(parsed);
+    }
+  } catch {}
+
+  // 4. Try Vercel Blob only as last resort
   if (USE_BLOB) {
     try {
       const { get } = await import('@vercel/blob');
@@ -111,21 +139,19 @@ export async function readDb(): Promise<DbData> {
           chunks.push(chunk as Uint8Array);
         }
         const content = Buffer.concat(chunks).toString("utf8");
-        const parsed = JSON.parse(content) as DbData;
-        return migrateDb(parsed);
+        if (content.trim().startsWith("{")) {
+          const parsed = JSON.parse(content) as DbData;
+          if (parsed.candidates && parsed.candidates.length > 0) {
+            return migrateDb(parsed);
+          }
+        }
       }
     } catch (e) {
-      console.warn("Could not read from Vercel Blob, falling back to local file:", e);
+      // Vercel Blob might be blocked or empty, ignore
     }
   }
-  
-  try {
-    const content = await fs.readFile(DB_FILE, "utf8");
-    const parsed = JSON.parse(content) as DbData;
-    return migrateDb(parsed);
-  } catch {
-    return { candidates: [], projects: ["Reliance TL project"] };
-  }
+
+  return { candidates: [], projects: ["Reliance TL project"] };
 }
 
 function migrateDb(parsed: DbData): DbData {
@@ -222,8 +248,15 @@ export async function writeDb(data: DbData): Promise<void> {
   
   const jsonContent = JSON.stringify(payload, null, 2);
   
-  // Always write to local file
-  await fs.writeFile(DB_FILE, jsonContent, "utf8");
+  // Always write to runtime DB file
+  await fs.writeFile(RUNTIME_DB_FILE, jsonContent, "utf8");
+
+  // Keep local seed file in sync when running locally
+  if (RUNTIME_DB_FILE !== SEED_DB_FILE) {
+    try {
+      await fs.writeFile(SEED_DB_FILE, jsonContent, "utf8");
+    } catch {}
+  }
 
   // If Cloudflare R2 configured, sync to R2
   if (isR2Configured()) {
@@ -234,7 +267,7 @@ export async function writeDb(data: DbData): Promise<void> {
     }
   }
 
-  // If on Vercel with Blob, sync in background
+  // If on Vercel with Blob, sync in background safely
   if (USE_BLOB) {
     try {
       const { put } = await import('@vercel/blob');
@@ -246,7 +279,7 @@ export async function writeDb(data: DbData): Promise<void> {
       });
       cachedBlobUrl = res.url;
     } catch (e) {
-      console.warn("Failed to write to Vercel Blob:", e);
+      // Ignore Blob failures
     }
   }
 }
@@ -308,7 +341,7 @@ export async function addCandidates(userEmail: string, newCandidates: DbCandidat
     if (fileBase64) {
       try {
         const fileBuffer = Buffer.from(fileBase64, 'base64');
-        const fileDir = path.join(DATA_DIR, 'files');
+        const fileDir = path.join(RUNTIME_DATA_DIR, 'files');
         await fs.mkdir(fileDir, { recursive: true });
         await fs.writeFile(path.join(fileDir, candidate.id), fileBuffer);
 
@@ -341,7 +374,7 @@ export async function addCandidates(userEmail: string, newCandidates: DbCandidat
     if (previewBase64) {
       try {
         const previewBuffer = Buffer.from(previewBase64, 'base64');
-        const previewDir = path.join(DATA_DIR, 'previews');
+        const previewDir = path.join(RUNTIME_DATA_DIR, 'previews');
         await fs.mkdir(previewDir, { recursive: true });
         await fs.writeFile(path.join(previewDir, candidate.id), previewBuffer);
 
@@ -405,8 +438,8 @@ export async function deleteCandidate(candidateId: string): Promise<boolean> {
   
   // Local deletion
   try {
-    await fs.unlink(path.join(DATA_DIR, 'files', candidateId)).catch(() => {});
-    await fs.unlink(path.join(DATA_DIR, 'previews', candidateId)).catch(() => {});
+    await fs.unlink(path.join(RUNTIME_DATA_DIR, 'files', candidateId)).catch(() => {});
+    await fs.unlink(path.join(RUNTIME_DATA_DIR, 'previews', candidateId)).catch(() => {});
   } catch {}
 
   // Blob deletion if on Vercel
@@ -434,10 +467,10 @@ export async function deleteAllCandidates(): Promise<boolean> {
   await writeDb(db);
   
   try {
-    await fs.rm(path.join(DATA_DIR, 'files'), { recursive: true, force: true }).catch(() => {});
-    await fs.rm(path.join(DATA_DIR, 'previews'), { recursive: true, force: true }).catch(() => {});
-    await fs.mkdir(path.join(DATA_DIR, 'files'), { recursive: true });
-    await fs.mkdir(path.join(DATA_DIR, 'previews'), { recursive: true });
+    await fs.rm(path.join(RUNTIME_DATA_DIR, 'files'), { recursive: true, force: true }).catch(() => {});
+    await fs.rm(path.join(RUNTIME_DATA_DIR, 'previews'), { recursive: true, force: true }).catch(() => {});
+    await fs.mkdir(path.join(RUNTIME_DATA_DIR, 'files'), { recursive: true });
+    await fs.mkdir(path.join(RUNTIME_DATA_DIR, 'previews'), { recursive: true });
   } catch {}
 
   if (USE_BLOB) {
@@ -464,7 +497,7 @@ export async function deleteAllCandidates(): Promise<boolean> {
 export async function getCandidateFile(candidateId: string): Promise<{ data: Buffer; mimeType: string } | null> {
   // 1. Try local filesystem
   try {
-    const filePath = path.join(DATA_DIR, 'files', candidateId);
+    const filePath = path.join(RUNTIME_DATA_DIR, 'files', candidateId);
     const data = await fs.readFile(filePath);
     const db = await readDb();
     const candidate = db.candidates.find(c => c.id === candidateId);
@@ -522,7 +555,7 @@ export async function getCandidateFile(candidateId: string): Promise<{ data: Buf
 export async function getCandidatePreview(candidateId: string): Promise<{ data: Buffer; mimeType: string } | null> {
   // 1. Try local filesystem preview
   try {
-    const filePath = path.join(DATA_DIR, 'previews', candidateId);
+    const filePath = path.join(RUNTIME_DATA_DIR, 'previews', candidateId);
     const data = await fs.readFile(filePath);
     const db = await readDb();
     const candidate = db.candidates.find(c => c.id === candidateId);

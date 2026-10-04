@@ -1,7 +1,5 @@
 .next
 node_modules
-data
-data/
 data/files
 data/previews
 .env*.local
